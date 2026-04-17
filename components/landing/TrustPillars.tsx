@@ -11,8 +11,8 @@ const PILLARS = [
   },
   {
     icon: "🗑️",
-    title: "Nothing stored",
-    body: "Close the tab and it's gone. No cookies, no tracking, no database. We literally can't see your messages.",
+    title: "Stays on your device",
+    body: "Nothing on our servers. Decoded archives are cached in your browser so reopening is instant — clear your browser's site data (or use the \"Clear all\" button in the viewer) and everything is gone. No cookies, no tracking.",
   },
 ];
 

@@ -31,6 +31,10 @@ export const FAQS = [
     q: "Can I see images I shared?",
     a: "Unfortunately no — Yahoo! never actually stored sent images in the archive, only a marker that a transfer happened. You'll see a 📎 placeholder where images used to be.",
   },
+  {
+    q: "Where does my archive live after the first upload?",
+    a: "Right in your own browser. The first decode runs on your device; the parsed result is saved to this site's IndexedDB store so re-opening the same archive later is instant — no re-parsing. A tiny pointer (which profile and conversation you had open last) lives in localStorage. Both are per-site, per-device — only this site on your browser can read them, and only you have access. To wipe everything, use the \"Clear all\" button in the recent-archives list, or open DevTools → Application → Storage → Clear site data.",
+  },
 ];
 
 export function FAQ() {

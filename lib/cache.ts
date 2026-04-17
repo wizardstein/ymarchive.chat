@@ -97,3 +97,18 @@ export async function cacheDelete(key: string): Promise<void> {
     // ignore
   }
 }
+
+export async function cacheClearAll(): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // ignore — privacy mode / quota
+  }
+}

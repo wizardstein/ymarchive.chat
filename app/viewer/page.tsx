@@ -7,12 +7,15 @@ import { ProcessingState } from "@/components/viewer/ProcessingState";
 import { ProfilePicker } from "@/components/viewer/ProfilePicker";
 import { Sidebar } from "@/components/viewer/Sidebar";
 import { UploadZone, type UploadPayload } from "@/components/viewer/UploadZone";
-import { cacheGet } from "@/lib/cache";
+import { cacheClearAll, cacheGet } from "@/lib/cache";
 import {
-  clearSession,
-  readSession,
-  saveSession,
+  clearAllSessions,
+  type ArchiveSession,
+  listSessions,
+  readLastSession,
+  removeSession,
   sessionLabel,
+  upsertSession,
 } from "@/lib/session";
 import type { ProcessingProgress, YMProfile } from "@/lib/types";
 import { parseArchive, parseFolderEntries } from "@/lib/zipParser";
@@ -28,24 +31,24 @@ export default function ViewerPage() {
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
   const [activePeer, setActivePeer] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [pastSessions, setPastSessions] = useState<ArchiveSession[]>([]);
   const restoreAttemptedRef = useRef(false);
 
-  // Auto-restore on mount: if we have a saved session AND the decoded
-  // archive is still in IndexedDB, jump straight back into the viewer.
-  useEffect(() => {
-    if (restoreAttemptedRef.current) return;
-    restoreAttemptedRef.current = true;
-    const session = readSession();
-    if (!session) {
-      setRestoring(false);
-      return;
-    }
-    (async () => {
+  const refreshPastSessions = useCallback(() => {
+    setPastSessions(listSessions());
+  }, []);
+
+  // Load a session (either the most-recent on mount, or one the user picks
+  // from the "recent archives" list). If the IndexedDB cache no longer has
+  // its parsed data, drop it from the session list so we don't keep
+  // offering a broken entry.
+  const loadSession = useCallback(
+    async (session: ArchiveSession): Promise<boolean> => {
       const cached = await cacheGet(session.fingerprint);
       if (!cached || cached.length === 0) {
-        clearSession();
-        setRestoring(false);
-        return;
+        removeSession(session.fingerprint);
+        refreshPastSessions();
+        return false;
       }
       setProfiles(cached);
       setFingerprint(session.fingerprint);
@@ -64,11 +67,32 @@ export default function ViewerPage() {
             ? session.activePeer
             : (profile.conversations[0]?.peer ?? null);
         setActivePeer(peer);
+      } else {
+        setActivePeer(null);
       }
       setProgress({ stage: "ready" });
+      setError(null);
+      return true;
+    },
+    [refreshPastSessions],
+  );
+
+  // Auto-restore on mount: if we have any saved sessions AND the most
+  // recent one is still in IndexedDB, jump straight back into the viewer.
+  useEffect(() => {
+    if (restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+    refreshPastSessions();
+    const last = readLastSession();
+    if (!last) {
+      setRestoring(false);
+      return;
+    }
+    (async () => {
+      await loadSession(last);
       setRestoring(false);
     })();
-  }, []);
+  }, [loadSession, refreshPastSessions]);
 
   const handleUpload = useCallback(async (payload: UploadPayload) => {
     setError(null);
@@ -99,17 +123,25 @@ export default function ViewerPage() {
       setProgress({ stage: "ready" });
 
       if (result.fingerprint) {
-        saveSession({
+        const totalMessages = result.profiles.reduce(
+          (s, p) => s + p.conversations.reduce((ss, c) => ss + c.messages.length, 0),
+          0,
+        );
+        const now = Date.now();
+        upsertSession({
           fingerprint: result.fingerprint,
           label: sessionLabel(result.profiles),
           profileCount: result.profiles.length,
+          totalMessages,
           pickedIdx: result.profiles.length === 1 ? 0 : null,
           activePeer:
             result.profiles.length === 1
               ? (result.profiles[0].conversations[0]?.peer ?? null)
               : null,
-          savedAt: Date.now(),
+          savedAt: now,
+          createdAt: now,
         });
+        refreshPastSessions();
       }
     } catch (e) {
       console.error(e);
@@ -137,21 +169,32 @@ export default function ViewerPage() {
     setActivePeer(p.conversations[0]?.peer ?? null);
   }, [profiles, pickedIdx, activePeer]);
 
-  // Persist navigation state as the user moves around.
+  // Persist navigation state as the user moves around. We upsert into the
+  // list so the same archive's entry keeps getting its savedAt bumped.
   useEffect(() => {
     if (!profiles || !fingerprint) return;
-    saveSession({
+    const totalMessages = profiles.reduce(
+      (s, p) => s + p.conversations.reduce((ss, c) => ss + c.messages.length, 0),
+      0,
+    );
+    const now = Date.now();
+    upsertSession({
       fingerprint,
       label: sessionLabel(profiles),
       profileCount: profiles.length,
+      totalMessages,
       pickedIdx,
       activePeer,
-      savedAt: Date.now(),
+      savedAt: now,
+      createdAt: now,
     });
-  }, [profiles, fingerprint, pickedIdx, activePeer]);
+    refreshPastSessions();
+  }, [profiles, fingerprint, pickedIdx, activePeer, refreshPastSessions]);
 
+  // "Open a different archive" just clears in-memory state — the archive
+  // stays in the cache and in the recent-archives list so the user can
+  // come back to it later.
   const handleReset = useCallback(() => {
-    clearSession();
     setProfiles(null);
     setFingerprint(null);
     setProgress({ stage: "idle" });
@@ -159,6 +202,48 @@ export default function ViewerPage() {
     setPickedIdx(null);
     setActivePeer(null);
   }, []);
+
+  const handleOpenPast = useCallback(
+    async (session: ArchiveSession) => {
+      setError(null);
+      setProgress({
+        stage: "unzipping",
+        message: "Loading from cache…",
+      });
+      const ok = await loadSession(session);
+      if (!ok) {
+        setError(
+          "That archive isn't in your browser's cache anymore — it was cleared or evicted. Drop the folder again to re-open it.",
+        );
+        setProgress({ stage: "error" });
+      }
+    },
+    [loadSession],
+  );
+
+  const handleRemovePast = useCallback(
+    (fingerprint: string) => {
+      removeSession(fingerprint);
+      // Best-effort IDB delete too, so storage is actually freed.
+      import("@/lib/cache").then(({ cacheDelete }) =>
+        cacheDelete(fingerprint).catch(() => {}),
+      );
+      refreshPastSessions();
+    },
+    [refreshPastSessions],
+  );
+
+  const handleClearAll = useCallback(async () => {
+    clearAllSessions();
+    await cacheClearAll();
+    setProfiles(null);
+    setFingerprint(null);
+    setPickedIdx(null);
+    setActivePeer(null);
+    setProgress({ stage: "idle" });
+    setError(null);
+    refreshPastSessions();
+  }, [refreshPastSessions]);
 
   const handlePickProfile = useCallback(
     (idx: number) => {
@@ -184,7 +269,15 @@ export default function ViewerPage() {
   }
 
   if (progress.stage === "idle" && !profiles) {
-    return <UploadZone onUpload={handleUpload} />;
+    return (
+      <UploadZone
+        onUpload={handleUpload}
+        pastSessions={pastSessions}
+        onOpenPast={handleOpenPast}
+        onRemovePast={handleRemovePast}
+        onClearAll={handleClearAll}
+      />
+    );
   }
 
   if (!profiles) {
