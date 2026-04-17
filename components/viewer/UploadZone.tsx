@@ -279,6 +279,21 @@ export function UploadZone({
       )}
 
       <div className="mt-6 max-w-md space-y-3 text-center text-xs leading-relaxed text-slate-500">
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-slate-700">
+          <strong className="font-semibold">A note on shared archives.</strong>{" "}
+          Yahoo&apos;s .dat format was never strongly encrypted — the files are
+          just XOR-scrambled with the account username. If this archive folder
+          contains profiles that belonged to other people on a shared
+          computer, their conversations decode just like yours. Please be
+          thoughtful about whose messages you&apos;re reading. This tool
+          performs no ownership check; responsibility stays with you.{" "}
+          <a
+            href="/#faq"
+            className="font-medium text-ym-purple hover:underline"
+          >
+            More in the FAQ →
+          </a>
+        </p>
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900">
           <strong className="font-semibold">
             Heads up about &ldquo;Pick a folder&rdquo;:

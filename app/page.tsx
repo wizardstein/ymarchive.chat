@@ -187,6 +187,12 @@ export default function LandingPage() {
           Built with ❤️ for everyone who still has that zip in a forgotten
           folder. No cookies. No tracking. No accounts.
         </p>
+        <p className="mx-auto mt-3 max-w-xl px-6 text-xs text-white/50">
+          This tool decodes files you point it at. It performs no ownership
+          check and doesn&apos;t assume responsibility for what you choose to
+          read — please respect the privacy of anyone whose conversations
+          end up in your archive.
+        </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs">
           <Link
             href="/feedback"

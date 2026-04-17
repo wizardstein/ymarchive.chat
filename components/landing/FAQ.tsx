@@ -35,6 +35,10 @@ export const FAQS = [
     q: "Where does my archive live after the first upload?",
     a: "Right in your own browser. The first decode runs on your device; the parsed result is saved to this site's IndexedDB store so re-opening the same archive later is instant — no re-parsing. A tiny pointer (which profile and conversation you had open last) lives in localStorage. Both are per-site, per-device — only this site on your browser can read them, and only you have access. To wipe everything, use the \"Clear all\" button in the recent-archives list, or open DevTools → Application → Storage → Clear site data.",
   },
+  {
+    q: "What about privacy for conversations of other people in the archive?",
+    a: "Worth thinking about. Yahoo's .dat format was never strongly encrypted — the files are just XOR-scrambled with the account's username, which means anyone who has the files on disk can read them with a tool like this one. Back then, the Messenger login password protected live access; it did not encrypt the archive. If you're opening a Profiles folder from an old shared computer (a family PC, a sibling's account, an ex-partner's), their conversations decode exactly like yours do, and no password on that old machine stood in the way. This site does no authentication and no ownership check — it runs entirely on your device and only does what you tell it to. You're deciding what to open; responsibility for what you read, keep, or share stays with you. If you're unsure whether you should be reading a particular archive, please don't.",
+  },
 ];
 
 export function FAQ() {
