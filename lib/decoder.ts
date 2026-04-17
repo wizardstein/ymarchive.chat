@@ -76,12 +76,20 @@ export function parseBlocks(data: Uint8Array): RawBlock[] {
     const direction = view.getInt32(offset + 8, true);
     const msgLength = view.getInt32(offset + 12, true);
 
-    // Defensive guardrail: abort if length is clearly invalid.
-    if (
-      msgLength < 0 ||
-      msgLength > 1_000_000 ||
-      offset + HEADER_SIZE + msgLength + END_MARKER_SIZE > data.length
-    ) {
+    if (msgLength < 0 || msgLength > 1_000_000) {
+      if (typeof console !== "undefined") {
+        console.warn(
+          `[ymdecoder] bailing at offset ${offset}/${data.length}: implausible msgLength=${msgLength}`,
+        );
+      }
+      break;
+    }
+    if (offset + HEADER_SIZE + msgLength > data.length) {
+      if (typeof console !== "undefined") {
+        console.warn(
+          `[ymdecoder] bailing at offset ${offset}/${data.length}: block payload (${msgLength} bytes) extends past end of file`,
+        );
+      }
       break;
     }
 
@@ -90,6 +98,8 @@ export function parseBlocks(data: Uint8Array): RawBlock[] {
       offset + HEADER_SIZE + msgLength,
     );
     blocks.push({ timestamp, direction, payload });
+    // Advance past the end marker if there's room. Some files in the wild
+    // have the marker omitted on the last block; don't lose that block.
     offset += HEADER_SIZE + msgLength + END_MARKER_SIZE;
   }
 

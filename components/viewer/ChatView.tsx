@@ -156,18 +156,25 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
   const jumpToTimestamp = useCallback(
     (targetTs: number) => {
       if (filterActive) return;
+      if (conversation.messages.length === 0) return;
       const idx = firstAtOrAfter(conversation.messages, targetTs);
       const clamped = Math.min(idx, conversation.messages.length - 1);
+      const targetMsgTs =
+        conversation.messages[clamped]?.timestamp ?? targetTs;
+
+      // Update sticky date synchronously so subsequent navigator clicks
+      // compute prev/next against the new position right away — without
+      // waiting for the async scroll event to fire.
+      setStickyDateTs(startOfDayLocalUnix(targetMsgTs));
+
       // Anchor the target near the top of the visible window.
+      const maxStart = Math.max(0, conversation.messages.length - WINDOW_SIZE);
       const newStart = Math.max(
         0,
-        Math.min(
-          conversation.messages.length - WINDOW_SIZE,
-          clamped - Math.floor(WINDOW_SIZE / 6),
-        ),
+        Math.min(maxStart, clamped - Math.floor(WINDOW_SIZE / 6)),
       );
       setWindowStart(newStart);
-      setPendingScrollTs(conversation.messages[clamped]?.timestamp ?? targetTs);
+      setPendingScrollTs(targetMsgTs);
     },
     [conversation.messages, filterActive],
   );

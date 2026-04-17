@@ -7,8 +7,12 @@ const DB_NAME = "ym-archive-viewer";
 const STORE = "results";
 const DB_VERSION = 1;
 
-// Bump if the YMProfile schema changes — invalidates prior cache entries.
-const SCHEMA_VERSION = 1;
+// Bump if the YMProfile schema or parser behavior changes in a way that
+// would make previously-cached results stale.
+//   v1 — initial
+//   v2 — fallback path regex + adjacent dedupe tweaks; forces everyone to
+//        re-parse so the expected data shows up.
+const SCHEMA_VERSION = 2;
 
 interface StoredResult {
   schemaVersion: number;
