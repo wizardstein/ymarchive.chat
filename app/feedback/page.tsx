@@ -19,6 +19,7 @@ export default function FeedbackPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
 
   const diagnostics = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -52,7 +53,11 @@ export default function FeedbackPage() {
       const resp = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, body, diagnostics }),
+        body: JSON.stringify({
+          kind,
+          body,
+          diagnostics: includeDiagnostics ? diagnostics : "",
+        }),
       });
       let data: { ok?: boolean; error?: string } = {};
       try {
@@ -160,21 +165,40 @@ export default function FeedbackPage() {
                 className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-ym-purple focus:outline-none focus:ring-1 focus:ring-ym-purple"
               />
 
-              <details className="mt-4 text-xs text-slate-500">
-                <summary className="cursor-pointer select-none font-medium">
-                  Diagnostic info that will be attached (optional)
-                </summary>
-                <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] text-slate-600">
-                  {diagnostics}
-                </pre>
-                <button
-                  type="button"
-                  onClick={copyDiagnostics}
-                  className="mt-2 rounded-full border border-slate-200 px-3 py-1 text-[11px] text-slate-600 hover:border-ym-purple hover:text-ym-purple"
-                >
-                  {copied ? "Copied!" : "Copy diagnostics"}
-                </button>
-              </details>
+              <div className="mt-4 rounded-lg border border-slate-200 p-3">
+                <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={includeDiagnostics}
+                    onChange={(e) => setIncludeDiagnostics(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 flex-none accent-ym-purple"
+                  />
+                  <span>
+                    <span className="font-medium text-slate-700">
+                      Include browser diagnostics with this message
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">
+                      Helpful for bug reports. Just your browser version,
+                      language, screen size, and the current time — no IP
+                      address, no archive data, no identity.
+                    </span>
+                  </span>
+                </label>
+                {includeDiagnostics && (
+                  <>
+                    <pre className="mt-3 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] text-slate-600">
+                      {diagnostics}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={copyDiagnostics}
+                      className="mt-2 rounded-full border border-slate-200 px-3 py-1 text-[11px] text-slate-600 hover:border-ym-purple hover:text-ym-purple"
+                    >
+                      {copied ? "Copied!" : "Copy diagnostics"}
+                    </button>
+                  </>
+                )}
+              </div>
 
               {sendError && (
                 <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
