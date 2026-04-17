@@ -122,14 +122,18 @@ export default function ViewerPage() {
     }
   }, []);
 
-  // Keep activePeer in sync with the selected profile.
+  // Recover from a stale activePeer when the selected profile changes —
+  // e.g. user had peer X selected in profile A, then switched to profile B
+  // which has no peer X. In that case, fall back to the new profile's first
+  // peer. Crucially, we do NOT fire when activePeer is null: on mobile the
+  // back button intentionally sets it to null to reveal the sidebar, and
+  // auto-restoring it here would immediately hide the sidebar again.
   useEffect(() => {
     if (!profiles || pickedIdx == null) return;
+    if (activePeer == null) return;
     const p = profiles[pickedIdx];
     if (!p) return;
-    if (activePeer && p.conversations.some((c) => c.peer === activePeer)) {
-      return;
-    }
+    if (p.conversations.some((c) => c.peer === activePeer)) return;
     setActivePeer(p.conversations[0]?.peer ?? null);
   }, [profiles, pickedIdx, activePeer]);
 
