@@ -1,4 +1,4 @@
-const FAQS = [
+export const FAQS = [
   {
     q: "Which Yahoo! Messenger versions are supported?",
     a: "Any version that wrote the classic .dat archive format — roughly 2003 through 2012. If your folder has a Messenger username subfolder with an Archive/Messages/ inside, you're good.",
@@ -35,7 +35,7 @@ const FAQS = [
 
 export function FAQ() {
   return (
-    <section className="bg-ym-cream">
+    <section id="faq" className="bg-ym-cream">
       <div className="mx-auto max-w-3xl px-6 py-20">
         <h2 className="text-center font-display text-4xl text-ym-purple-dark">
           Questions people actually ask

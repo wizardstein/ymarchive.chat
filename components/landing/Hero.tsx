@@ -18,6 +18,9 @@ export function Hero() {
           <br />
           <span className="text-yellow-200">back from the dead.</span>
         </h1>
+        <p className="mx-auto mt-4 max-w-2xl text-sm uppercase tracking-[0.2em] text-white/70">
+          A Yahoo! Messenger archive viewer for your old .dat files
+        </p>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-white/90">
           Drop in your old Yahoo! Messenger profile folder — or a zip of it —
           and browse every message exactly as it was. Works on Mac, Windows,
