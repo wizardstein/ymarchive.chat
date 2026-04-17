@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ym-purple: #6f2da8;
+  --ym-purple-dark: #4b1e73;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-ym-cream text-slate-900 antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.gradient-purple {
+  background: linear-gradient(135deg, #6f2da8 0%, #a66ed9 50%, #4b1e73 100%);
+}
+
+.scrollbar-slim::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background: rgba(111, 45, 168, 0.3);
+  border-radius: 4px;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb:hover {
+  background: rgba(111, 45, 168, 0.55);
+}
