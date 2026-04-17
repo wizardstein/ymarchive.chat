@@ -208,23 +208,39 @@ export default function ViewerPage() {
     profile.conversations.find((c) => c.peer === activePeer) ??
     profile.conversations[0];
 
+  // On mobile, show sidebar OR chat — not both — so nothing gets clipped at
+  // narrow widths. The chat is "active" once a peer is selected.
+  const mobileShowChat = activePeer != null;
+
   return (
-    <main className="flex h-screen w-screen overflow-hidden bg-ym-cream">
-      <Sidebar
-        profile={profile}
-        profileCount={profiles.length}
-        activePeer={conversation?.peer ?? null}
-        onSelectPeer={setActivePeer}
-        onSwitchProfile={handleSwitchProfile}
-        onReset={handleReset}
-      />
-      {conversation ? (
-        <ChatView profile={profile} conversation={conversation} />
-      ) : (
-        <div className="flex flex-1 items-center justify-center text-slate-400">
-          This profile has no conversations.
-        </div>
-      )}
+    <main className="flex h-[100dvh] w-full overflow-hidden bg-ym-cream">
+      <div
+        className={`${mobileShowChat ? "hidden md:flex" : "flex"} h-full w-full md:w-auto`}
+      >
+        <Sidebar
+          profile={profile}
+          profileCount={profiles.length}
+          activePeer={conversation?.peer ?? null}
+          onSelectPeer={setActivePeer}
+          onSwitchProfile={handleSwitchProfile}
+          onReset={handleReset}
+        />
+      </div>
+      <div
+        className={`${mobileShowChat ? "flex" : "hidden md:flex"} h-full min-w-0 flex-1 flex-col`}
+      >
+        {conversation ? (
+          <ChatView
+            profile={profile}
+            conversation={conversation}
+            onBack={() => setActivePeer(null)}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-slate-400">
+            This profile has no conversations.
+          </div>
+        )}
+      </div>
       <DonateBadge />
     </main>
   );

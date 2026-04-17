@@ -171,7 +171,7 @@ export function JumpToDateMenu({
       {open && (
         <div
           ref={listRef}
-          className="scrollbar-slim absolute left-0 top-full z-20 mt-2 max-h-96 w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
+          className="scrollbar-slim absolute left-0 top-full z-20 mt-2 max-h-96 w-[min(16rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
         >
           {hasMessages && (
             <div className="flex gap-1 border-b border-slate-100 p-2">

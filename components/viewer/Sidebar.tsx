@@ -38,7 +38,7 @@ export function Sidebar({
   );
 
   return (
-    <aside className="flex h-full w-72 flex-none flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full w-full flex-col border-slate-200 bg-white md:w-72 md:flex-none md:border-r">
       <div className="border-b border-slate-200 p-3">
         <button
           onClick={onReset}

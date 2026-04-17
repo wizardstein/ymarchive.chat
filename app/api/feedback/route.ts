@@ -72,7 +72,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const subject = `${SUBJECT_PREFIX[kind]} YM Archive Viewer`;
+  // Gmail strips [bracketed] tags when computing thread identity, so if the
+  // rest of the subject is the same across messages it collapses them all
+  // under one thread title. Append a snippet of the body so every subject
+  // is unique AND previews the message in the inbox list.
+  const snippet = body
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 60)
+    .replace(/\s+\S*$/, ""); // don't cut mid-word
+  const subject = snippet
+    ? `${SUBJECT_PREFIX[kind]} ${snippet}`
+    : `${SUBJECT_PREFIX[kind]} YM Archive Viewer`;
   const textBody = diagnostics
     ? `${body}\n\n---\nDiagnostics:\n${diagnostics}`
     : body;
@@ -106,6 +117,15 @@ export async function POST(req: Request) {
     if (!resp.ok) {
       const detail = await resp.text().catch(() => "");
       console.error("Resend send failed:", resp.status, detail);
+      if (resp.status === 429) {
+        return NextResponse.json(
+          {
+            error:
+              "The site has hit today's email limit. Please try again tomorrow, or leave a message on Buy Me a Coffee.",
+          },
+          { status: 429 },
+        );
+      }
       return NextResponse.json(
         { error: "The message couldn't be sent. Try again later." },
         { status: 502 },

@@ -26,6 +26,7 @@ const WINDOW_SIZE = 400;
 interface ChatViewProps {
   profile: YMProfile;
   conversation: YMConversation;
+  onBack?: () => void;
 }
 
 /**
@@ -43,7 +44,7 @@ function firstAtOrAfter(messages: YMMessage[], targetTs: number): number {
   return lo;
 }
 
-export function ChatView({ profile, conversation }: ChatViewProps) {
+export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -196,7 +197,25 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
 
   return (
     <section className="flex h-full flex-1 flex-col bg-ym-cream">
-      <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-5 py-3">
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:gap-3 sm:px-5">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:border-ym-purple hover:text-ym-purple md:hidden"
+            aria-label="Back to contacts"
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+              <path
+                d="M12 5l-5 5 5 5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         <div
           className="flex h-10 w-10 flex-none items-center justify-center rounded-full text-sm font-bold text-white"
           style={{ background: colorFor(conversation.peer) }}
@@ -218,10 +237,16 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
         {profile.avatarHistory.length > 0 && (
           <button
             onClick={() => setShowAvatarHistory((s) => !s)}
-            className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:border-ym-purple hover:text-ym-purple"
+            className="flex-none rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-ym-purple hover:text-ym-purple sm:px-3"
+            title="Show your avatar history"
           >
-            {showAvatarHistory ? "Hide" : "Show"} your avatar history (
-            {profile.avatarHistory.length})
+            <span className="hidden sm:inline">
+              {showAvatarHistory ? "Hide" : "Show"} your avatar history (
+              {profile.avatarHistory.length})
+            </span>
+            <span className="sm:hidden">
+              🖼️ {profile.avatarHistory.length}
+            </span>
           </button>
         )}
       </header>
@@ -240,7 +265,7 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-5 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-5">
         <JumpToDateMenu
           messages={conversation.messages}
           currentTimestamp={stickyDateTs}
@@ -249,10 +274,10 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search this conversation…"
-          className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-ym-purple focus:outline-none focus:ring-1 focus:ring-ym-purple"
+          placeholder="Search…"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-ym-purple focus:outline-none focus:ring-1 focus:ring-ym-purple"
         />
-        <label className="flex items-center gap-1 text-xs text-slate-500">
+        <label className="hidden items-center gap-1 text-xs text-slate-500 sm:flex">
           From
           <input
             type="date"
@@ -261,7 +286,7 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
             className="rounded border border-slate-200 px-2 py-1 text-xs"
           />
         </label>
-        <label className="flex items-center gap-1 text-xs text-slate-500">
+        <label className="hidden items-center gap-1 text-xs text-slate-500 sm:flex">
           To
           <input
             type="date"
@@ -287,7 +312,7 @@ export function ChatView({ profile, conversation }: ChatViewProps) {
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={scrollRef}
-          className="scrollbar-slim relative flex-1 overflow-y-auto px-5 py-4"
+          className="scrollbar-slim relative flex-1 overflow-y-auto px-3 py-4 sm:px-5"
         >
           {/* Sticky "currently viewing" date. Pointer-events disabled so it
               doesn't catch clicks intended for the message below. */}

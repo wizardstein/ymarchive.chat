@@ -58,7 +58,7 @@ export function DayNavigator({
   if (days.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-2">
+    <div className="pointer-events-none absolute right-4 top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-2 sm:flex">
       <button
         type="button"
         disabled={prevDay == null}
