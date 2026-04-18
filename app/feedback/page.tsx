@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BUY_ME_A_COFFEE_URL } from "@/lib/links";
+import { DonationButton } from "@/components/DonationButton";
 
 const SUBJECT_LINES = {
   bug: "🐛 Bug report",
@@ -68,7 +68,7 @@ export default function FeedbackPage() {
       if (!resp.ok || !data.ok) {
         setSendError(
           data.error ||
-            "The message didn't go through. Please try again, or leave a message on Buy Me a Coffee.",
+            "The message didn't go through. Please try again in a moment.",
         );
         return;
       }
@@ -76,7 +76,7 @@ export default function FeedbackPage() {
       setBody("");
     } catch {
       setSendError(
-        "Network hiccup. Check your connection and try again, or leave a message on Buy Me a Coffee.",
+        "Network hiccup. Check your connection and try again.",
       );
     } finally {
       setSending(false);
@@ -225,20 +225,16 @@ export default function FeedbackPage() {
 
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="font-display text-xl text-amber-900">
-            Prefer public comments?
+            Enjoying the project?
           </h2>
           <p className="mt-2 text-sm text-amber-900/80">
-            You can also leave a public note (and optionally tip the
-            developer a coffee) on Buy Me a Coffee.
+            This is a free, one-person project with no ads and no tracking. If
+            it helped you recover an old chat, a small tip keeps it running.
           </p>
-          <a
-            href={BUY_ME_A_COFFEE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+          <DonationButton
             className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition hover:bg-amber-300"
-          >
-            ☕ Leave a message on Buy Me a Coffee →
-          </a>
+            label="☕ Support this project"
+          />
         </div>
       </div>
     </main>

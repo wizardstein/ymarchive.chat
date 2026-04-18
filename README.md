@@ -80,7 +80,7 @@ That's it. The site works. Three environment variables are *optional*; they only
 
 The `/feedback` page POSTs to `/api/feedback`, a small serverless function that relays the message via [Resend](https://resend.com) so your email address never lives in the client bundle.
 
-If you don't configure it, the API cleanly returns HTTP 503 and the feedback UI surfaces a friendly "not configured yet" note with a Buy Me a Coffee fallback. The rest of the site works exactly the same.
+If you don't configure it, the API cleanly returns HTTP 503 and the feedback UI surfaces a friendly "not configured yet" note. The rest of the site works exactly the same.
 
 ### Three environment variables
 
@@ -167,7 +167,7 @@ If you want to verify any of this, open your browser's Network tab while using t
 
 This is a small, self-contained Next.js app — easy to fork and make your own. Things you'd typically change:
 
-- `lib/links.ts` — Buy Me a Coffee URL.
+- `REVOLUT_SECRET_KEY` env var — your own Revolut Merchant API key if you want to accept donations.
 - `FEEDBACK_TO_EMAIL` env var — your inbox.
 - Landing-page copy in `components/landing/*`.
 

@@ -5,7 +5,7 @@ import { TrustPillars } from "@/components/landing/TrustPillars";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { DemoPreview } from "@/components/landing/DemoPreview";
 import { FAQ, FAQS } from "@/components/landing/FAQ";
-import { BUY_ME_A_COFFEE_URL } from "@/lib/links";
+import { DonationButton } from "@/components/DonationButton";
 
 export const metadata: Metadata = {
   title: {
@@ -200,14 +200,10 @@ export default function LandingPage() {
           >
             💬 Feedback or bug report
           </Link>
-          <a
-            href={BUY_ME_A_COFFEE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+          <DonationButton
             className="rounded-full bg-amber-400 px-4 py-1.5 font-semibold text-amber-950 transition hover:bg-amber-300"
-          >
-            ☕ Buy me a coffee
-          </a>
+            label="☕ Support this project"
+          />
         </div>
       </footer>
     </main>

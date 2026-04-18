@@ -121,7 +121,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "The site has hit today's email limit. Please try again tomorrow, or leave a message on Buy Me a Coffee.",
+              "The site has hit today's email limit. Please try again tomorrow.",
           },
           { status: 429 },
         );

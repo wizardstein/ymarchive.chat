@@ -71,7 +71,15 @@ If you change the message list, preserve both mechanisms — dropping either mak
 - `FEEDBACK_TO_EMAIL` — recipient address (server-only; never appears in the browser bundle or in any `href`)
 - `FEEDBACK_FROM_EMAIL` — verified sender. `onboarding@resend.dev` works for dev but only delivers to the Resend account owner; production should use a verified custom domain.
 
-If any of the three are unset, the route returns HTTP 503 and the feedback page surfaces a friendly "isn't configured yet" error with a fallback to the Buy Me a Coffee message flow — no half-broken silent failure.
+If any of the three are unset, the route returns HTTP 503 and the feedback page surfaces a friendly "isn't configured yet" error — no half-broken silent failure.
+
+## Donation relay
+
+`app/api/create-payment/route.ts` POSTs to the Revolut Merchant API so the secret key never ships to the client. Required env var:
+
+- `REVOLUT_SECRET_KEY` — production secret key from Revolut Business → Settings → APIs → Merchant API
+
+The route validates amount (€1–€1000), converts to minor units, and passes a `redirect_url` derived from the request origin so previews and local dev land on the right `/thank-you` page without touching the Revolut dashboard. If the env var is unset the route returns 503 and the donate modal surfaces a friendly error.
 
 ## Session persistence
 
