@@ -15,6 +15,9 @@ import { NextResponse } from "next/server";
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 1000;
 const CURRENCY = "EUR";
+const DEFAULT_DESCRIPTION = "Support ymarchive.chat ☕";
+// Revolut caps order descriptions at 1024 chars; keep well under that.
+const MAX_MESSAGE_LENGTH = 500;
 
 export async function POST(req: Request) {
   const secret = process.env.REVOLUT_SECRET_KEY;
@@ -36,7 +39,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { amount: rawAmount } = payload as { amount?: unknown };
+  const { amount: rawAmount, message: rawMessage } = payload as {
+    amount?: unknown;
+    message?: unknown;
+  };
   const amount =
     typeof rawAmount === "number"
       ? rawAmount
@@ -54,6 +60,10 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+
+  const trimmedMessage =
+    typeof rawMessage === "string" ? rawMessage.trim().slice(0, MAX_MESSAGE_LENGTH) : "";
+  const description = trimmedMessage || DEFAULT_DESCRIPTION;
 
   // Revolut expects the amount in the currency's minor unit (cents for EUR).
   const amountInCents = Math.round(amount * 100);
@@ -75,7 +85,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         amount: amountInCents,
         currency: CURRENCY,
-        description: "Support ymarchive.chat ☕",
+        description,
         redirect_url: redirectUrl,
         merchant_order_ext_ref: `donation-${Date.now()}`,
       }),

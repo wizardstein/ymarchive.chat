@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 const PRESET_AMOUNTS = [3, 5, 10, 25] as const;
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 1000;
+const MAX_MESSAGE_LENGTH = 500;
 
 type DonationButtonProps = {
   className?: string;
@@ -34,6 +35,7 @@ type DonationModalProps = {
 export function DonationModal({ open, onClose }: DonationModalProps) {
   const [selected, setSelected] = useState<number>(5);
   const [custom, setCustom] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -70,7 +72,10 @@ export function DonationModal({ open, onClose }: DonationModalProps) {
       const resp = await fetch("/api/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: effectiveAmount }),
+        body: JSON.stringify({
+          amount: effectiveAmount,
+          message: message.trim() || undefined,
+        }),
       });
       let data: { checkoutUrl?: string; error?: string } = {};
       try {
@@ -178,6 +183,24 @@ export function DonationModal({ open, onClose }: DonationModalProps) {
               className="w-full bg-transparent px-3 py-2.5 font-mono text-sm text-slate-700 outline-none placeholder:text-slate-300"
             />
           </div>
+
+          <div className="mt-5 flex items-baseline justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Leave a message{" "}
+              <span className="font-normal normal-case text-slate-400">(optional)</span>
+            </p>
+            <span className="font-mono text-[10px] text-slate-400">
+              {message.length}/{MAX_MESSAGE_LENGTH}
+            </span>
+          </div>
+          <textarea
+            rows={2}
+            maxLength={MAX_MESSAGE_LENGTH}
+            placeholder="Say hi, share a memory, or just leave it blank…"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-ym-purple focus:ring-1 focus:ring-ym-purple"
+          />
 
           <div className="mt-5 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
             <span>You&apos;re donating</span>
