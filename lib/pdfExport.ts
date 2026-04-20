@@ -282,7 +282,18 @@ function drawCoverHeader(
     day: "numeric",
   });
   doc.text(`Exported ${today}`, PAGE.marginX, y, { baseline: "top" });
-  y += lineHeightMm(FONT_SIZES.subtitle) + 5;
+  y += lineHeightMm(FONT_SIZES.subtitle) + 1;
+
+  // Attribution link — pulled out of the per-page footer so it appears once,
+  // up front, alongside the other "what is this?" metadata.
+  doc.setFontSize(FONT_SIZES.footer);
+  doc.setTextColor(COLORS.link);
+  const linkText = "Generated with ymarchive.chat";
+  doc.text(linkText, PAGE.marginX, y, { baseline: "top" });
+  const linkW = doc.getTextWidth(linkText);
+  const linkH = lineHeightMm(FONT_SIZES.footer);
+  doc.link(PAGE.marginX, y, linkW, linkH, { url: "https://ymarchive.chat" });
+  y += linkH + 6;
 
   return y;
 }
@@ -294,19 +305,69 @@ function drawFootersOnAllPages(doc: JsPDFType, fontName: string): void {
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
     const footY = PAGE.pageH - 8;
-
-    const linkText = "Generated with ymarchive.chat";
-    const tw = doc.getTextWidth(linkText);
-    const linkX = PAGE.marginX + (PAGE.contentW - tw) / 2;
-    doc.setTextColor(COLORS.link);
-    doc.textWithLink(linkText, linkX, footY, {
-      url: "https://ymarchive.chat",
-    });
-
     doc.setTextColor(COLORS.meta);
     doc.text(`Page ${p} of ${pageCount}`, PAGE.marginX + PAGE.contentW, footY, {
       align: "right",
     });
+  }
+}
+
+interface MonthMarker {
+  year: number;
+  month: number; // 0-11
+  monthStartTs: number; // unix seconds
+  count: number;
+  pageNumber: number; // resolved during render, shifted after TOC insertion
+}
+
+const TOC_ENTRIES_PER_PAGE = 40;
+
+function formatMonthLabel(m: MonthMarker): string {
+  return new Date(m.monthStartTs * 1000).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function drawTocPage(
+  doc: JsPDFType,
+  fontName: string,
+  entries: MonthMarker[],
+  isFirstTocPage: boolean,
+): void {
+  let y = PAGE.marginTop;
+
+  if (isFirstTocPage) {
+    doc.setFont(fontName, "normal");
+    doc.setFontSize(FONT_SIZES.title);
+    doc.setTextColor(COLORS.title);
+    doc.text("Contents", PAGE.marginX, y, { baseline: "top" });
+    y += lineHeightMm(FONT_SIZES.title) + 4;
+  }
+
+  doc.setFont(fontName, "normal");
+  doc.setFontSize(FONT_SIZES.subtitle);
+  const lineH = lineHeightMm(FONT_SIZES.subtitle) + 2.5;
+
+  for (const e of entries) {
+    const label = formatMonthLabel(e);
+    const countText = `${e.count.toLocaleString()} ${e.count === 1 ? "message" : "messages"}`;
+
+    doc.setTextColor(COLORS.link);
+    doc.text(label, PAGE.marginX, y, { baseline: "top" });
+
+    doc.setTextColor(COLORS.subtitle);
+    doc.text(countText, PAGE.marginX + PAGE.contentW, y, {
+      baseline: "top",
+      align: "right",
+    });
+
+    // Whole row is clickable.
+    doc.link(PAGE.marginX, y, PAGE.contentW, lineH, {
+      pageNumber: e.pageNumber,
+    });
+
+    y += lineH;
   }
 }
 
@@ -336,6 +397,8 @@ export async function exportConversationToPdf(
   let lastDay = -1;
   let lastSender: string | null = null;
   let lastIsLocal: boolean | null = null;
+  const monthMarkers: MonthMarker[] = [];
+  let currentMonth: MonthMarker | null = null;
 
   for (const msg of messages) {
     const day = startOfDay(msg.timestamp);
@@ -345,12 +408,35 @@ export async function exportConversationToPdf(
         doc.addPage();
         y = PAGE.marginTop;
       }
+
+      // Capture the start-of-month marker AFTER any divider page break, so
+      // the recorded pageNumber matches where the user will visually land.
+      const d = new Date(msg.timestamp * 1000);
+      const yr = d.getFullYear();
+      const mo = d.getMonth();
+      if (
+        !currentMonth ||
+        currentMonth.year !== yr ||
+        currentMonth.month !== mo
+      ) {
+        currentMonth = {
+          year: yr,
+          month: mo,
+          monthStartTs: new Date(yr, mo, 1, 0, 0, 0, 0).getTime() / 1000,
+          count: 0,
+          pageNumber: doc.getCurrentPageInfo().pageNumber,
+        };
+        monthMarkers.push(currentMonth);
+      }
+
       drawDivider(doc, fontName, formatDateDivider(msg.timestamp), y);
       y += dh + 1.5;
       lastDay = day;
       lastSender = null;
       lastIsLocal = null;
     }
+
+    if (currentMonth) currentMonth.count++;
 
     if (msg.isBuzz) {
       const bh = buzzHeight();
@@ -378,6 +464,32 @@ export async function exportConversationToPdf(
     y += layout.totalHeight + BUBBLE.vGap;
     lastSender = msg.sender;
     lastIsLocal = msg.isLocal;
+  }
+
+  // Insert TOC pages between the cover and the body when the conversation
+  // spans multiple months. Pages are inserted blank, then filled and linked.
+  if (monthMarkers.length >= 2) {
+    const tocPagesNeeded = Math.ceil(
+      monthMarkers.length / TOC_ENTRIES_PER_PAGE,
+    );
+    for (let i = 0; i < tocPagesNeeded; i++) {
+      doc.insertPage(2);
+    }
+    for (const m of monthMarkers) {
+      m.pageNumber += tocPagesNeeded;
+    }
+    for (let i = 0; i < tocPagesNeeded; i++) {
+      doc.setPage(2 + i);
+      const slice = monthMarkers.slice(
+        i * TOC_ENTRIES_PER_PAGE,
+        (i + 1) * TOC_ENTRIES_PER_PAGE,
+      );
+      drawTocPage(doc, fontName, slice, i === 0);
+    }
+    // Sidebar bookmarks — cheap bonus for PDF viewers that show an outline.
+    for (const m of monthMarkers) {
+      doc.outline.add(null, formatMonthLabel(m), { pageNumber: m.pageNumber });
+    }
   }
 
   drawFootersOnAllPages(doc, fontName);
