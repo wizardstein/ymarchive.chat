@@ -83,13 +83,31 @@ interface BubbleLayout {
   totalHeight: number;
 }
 
+/**
+ * Normalize text for PDF rendering. Old YM archives often carry CR/LF
+ * line endings and stray control characters from the original Windows
+ * client. jsPDF's text() interprets `\r` as an internal line break and
+ * advances its own y cursor — so a string like "a\rb\rc" rendered with
+ * baseline:"top" actually paints three visual rows for a single call,
+ * but my caller's manual `padY + i * lineH` positioning doesn't account
+ * for that, and subsequent lines overprint each other. Clean once,
+ * here, before measurement and rendering both run on the same string.
+ */
+function normalizeText(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    // Strip control chars except \n and \t.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+}
+
 function layoutBubble(
   doc: JsPDFType,
   fontName: string,
   msg: YMMessage,
   showSender: boolean,
 ): BubbleLayout {
-  const text = msg.isImageShare && !msg.text ? "[Image shared]" : msg.text || " ";
+  const rawText = msg.isImageShare && !msg.text ? "[Image shared]" : msg.text || " ";
+  const text = normalizeText(rawText);
   const maxBubbleW = PAGE.contentW * BUBBLE.maxWidthRatio;
   const maxTextW = maxBubbleW - 2 * BUBBLE.padX;
 
