@@ -29,6 +29,12 @@ const COLORS = {
   link: "#6f2da8",
   title: "#0f172a",
   subtitle: "#475569",
+  // Cover-specific palette, picked from the landing page (tailwind.config.ts).
+  ymPurple: "#6f2da8",
+  ymPurpleDark: "#4b1e73",
+  ymCream: "#fef9f3",
+  hairline: "#e2e8f0", // slate-200
+  meta2: "#64748b",    // slate-500
 } as const;
 
 const FONT_SIZES = {
@@ -255,45 +261,75 @@ function drawCoverHeader(
   messages: YMMessage[],
   scope: "filtered" | "full",
 ): number {
-  let y = PAGE.marginTop;
+  // Full-width purple accent stripe at the very top — visual anchor that
+  // echoes the landing page's use of ym-purple.
+  doc.setFillColor(COLORS.ymPurple);
+  doc.rect(0, 0, PAGE.pageW, 2.5, "F");
 
+  let y = PAGE.marginTop + 3;
+
+  // Eyebrow — small, uppercase, tracked, ym-purple.
   doc.setFont(fontName, "normal");
-  doc.setFontSize(FONT_SIZES.title);
-  doc.setTextColor(COLORS.title);
-  doc.text(`Conversation with ${conversation.peer}`, PAGE.marginX, y, {
-    baseline: "top",
-  });
-  y += lineHeightMm(FONT_SIZES.title) + 1.5;
+  doc.setFontSize(8);
+  doc.setTextColor(COLORS.ymPurple);
+  doc.setCharSpace(0.8);
+  doc.text("YAHOO!  MESSENGER  ARCHIVE", PAGE.marginX, y, { baseline: "top" });
+  doc.setCharSpace(0);
+  y += lineHeightMm(8) + 6;
 
+  // Display title — split onto two lines so the two participants are
+  // visually prominent, landing-page style.
+  doc.setFontSize(24);
+  doc.setTextColor(COLORS.ymPurpleDark);
+  doc.text("Conversation between", PAGE.marginX, y, { baseline: "top" });
+  y += lineHeightMm(24) + 0.5;
+
+  const namesText = `${profile.username} and ${conversation.peer}`;
+  const nameLines = doc.splitTextToSize(namesText, PAGE.contentW) as string[];
+  for (const line of nameLines) {
+    doc.text(line, PAGE.marginX, y, { baseline: "top" });
+    y += lineHeightMm(24);
+  }
+  y += 5;
+
+  // Meta line — date range + message count, slightly subdued.
   const first = messages[0]?.timestamp;
   const last = messages[messages.length - 1]?.timestamp;
   const range = first && last ? formatDateRange(first, last) : "";
   const scopeNote = scope === "filtered" ? " (filtered)" : "";
-  const sub = `From ${profile.username} · ${messages.length.toLocaleString()} messages${scopeNote}${range ? ` · ${range}` : ""}`;
-
-  doc.setFontSize(FONT_SIZES.subtitle);
+  const sub = `${range ? `${range}  ·  ` : ""}${messages.length.toLocaleString()} messages${scopeNote}`;
+  doc.setFontSize(11);
   doc.setTextColor(COLORS.subtitle);
   doc.text(sub, PAGE.marginX, y, { baseline: "top" });
-  y += lineHeightMm(FONT_SIZES.subtitle) + 1;
+  y += lineHeightMm(11) + 7;
 
+  // Hairline divider to visually separate the title block from the TOC.
+  doc.setDrawColor(COLORS.hairline);
+  doc.setLineWidth(0.2);
+  doc.line(PAGE.marginX, y, PAGE.marginX + PAGE.contentW, y);
+  y += 4.5;
+
+  // Attribution block — exported date + clickable ymarchive.chat link.
   const today = new Date().toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
-  doc.text(`Exported ${today}`, PAGE.marginX, y, { baseline: "top" });
-  y += lineHeightMm(FONT_SIZES.subtitle) + 1;
+  doc.setFontSize(9);
+  doc.setTextColor(COLORS.meta2);
+  const exportedText = `Exported ${today}  ·  Generated with `;
+  doc.text(exportedText, PAGE.marginX, y, { baseline: "top" });
+  const exportedW = doc.getTextWidth(exportedText);
 
-  // Attribution link — pulled out of the per-page footer so it appears once,
-  // up front, alongside the other "what is this?" metadata.
-  doc.setFontSize(FONT_SIZES.footer);
   doc.setTextColor(COLORS.link);
-  const linkText = "Generated with ymarchive.chat";
-  doc.text(linkText, PAGE.marginX, y, { baseline: "top" });
+  const linkText = "ymarchive.chat";
+  doc.text(linkText, PAGE.marginX + exportedW, y, { baseline: "top" });
   const linkW = doc.getTextWidth(linkText);
-  const linkH = lineHeightMm(FONT_SIZES.footer);
-  doc.link(PAGE.marginX, y, linkW, linkH, { url: "https://ymarchive.chat" });
-  y += linkH + 6;
+  const linkH = lineHeightMm(9);
+  doc.link(PAGE.marginX + exportedW, y, linkW, linkH, {
+    url: "https://ymarchive.chat",
+  });
+  y += linkH + 10;
 
   return y;
 }
@@ -331,24 +367,22 @@ function drawFootersOnAllPages(
   }
 }
 
-function countDistinctMonths(messages: YMMessage[]): number {
-  const seen = new Set<string>();
-  for (const m of messages) {
-    const d = new Date(m.timestamp * 1000);
-    seen.add(`${d.getFullYear()}-${d.getMonth()}`);
-  }
-  return seen.size;
-}
-
 interface MonthMarker {
   year: number;
   month: number; // 0-11
   monthStartTs: number; // unix seconds
   count: number;
-  pageNumber: number; // resolved during render, shifted after TOC insertion
+  pageNumber: number; // resolved during render
 }
 
-const TOC_ENTRIES_PER_PAGE = 40;
+interface TocLinkRect {
+  marker: MonthMarker;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 function formatMonthLabel(m: MonthMarker): string {
   return new Date(m.monthStartTs * 1000).toLocaleDateString(undefined, {
@@ -357,29 +391,69 @@ function formatMonthLabel(m: MonthMarker): string {
   });
 }
 
-function drawTocPage(
+/**
+ * Walk messages once, returning one MonthMarker per distinct (year, month).
+ * Counts are filled in here; `pageNumber` is filled in later by the render
+ * loop. Markers are returned in chronological order (input order).
+ */
+function precomputeMonths(messages: YMMessage[]): {
+  markers: MonthMarker[];
+  byKey: Map<string, MonthMarker>;
+} {
+  const byKey = new Map<string, MonthMarker>();
+  const markers: MonthMarker[] = [];
+  for (const m of messages) {
+    const d = new Date(m.timestamp * 1000);
+    const yr = d.getFullYear();
+    const mo = d.getMonth();
+    const key = `${yr}-${mo}`;
+    let entry = byKey.get(key);
+    if (!entry) {
+      entry = {
+        year: yr,
+        month: mo,
+        monthStartTs: new Date(yr, mo, 1, 0, 0, 0, 0).getTime() / 1000,
+        count: 0,
+        pageNumber: 0,
+      };
+      byKey.set(key, entry);
+      markers.push(entry);
+    }
+    entry.count++;
+  }
+  return { markers, byKey };
+}
+
+/**
+ * Draw the TOC inline starting at `startY` on the current page. Overflows
+ * onto additional pages naturally. Records each row's geometry so links can
+ * be added later, once the message render pass has resolved page numbers.
+ */
+function drawTocInline(
   doc: JsPDFType,
   fontName: string,
-  entries: MonthMarker[],
-  isFirstTocPage: boolean,
-): void {
-  let y = PAGE.marginTop;
-
-  if (isFirstTocPage) {
-    doc.setFont(fontName, "normal");
-    doc.setFontSize(FONT_SIZES.title);
-    doc.setTextColor(COLORS.title);
-    doc.text("Contents", PAGE.marginX, y, { baseline: "top" });
-    y += lineHeightMm(FONT_SIZES.title) + 4;
-  }
+  markers: MonthMarker[],
+  startY: number,
+): { endY: number; linkRects: TocLinkRect[]; lastPage: number } {
+  let y = startY;
 
   doc.setFont(fontName, "normal");
+  doc.setFontSize(FONT_SIZES.title);
+  doc.setTextColor(COLORS.title);
+  doc.text("Contents", PAGE.marginX, y, { baseline: "top" });
+  y += lineHeightMm(FONT_SIZES.title) + 4;
+
   doc.setFontSize(FONT_SIZES.subtitle);
   const lineH = lineHeightMm(FONT_SIZES.subtitle) + 2.5;
+  const linkRects: TocLinkRect[] = [];
 
-  for (const e of entries) {
-    const label = formatMonthLabel(e);
-    const countText = `${e.count.toLocaleString()} ${e.count === 1 ? "message" : "messages"}`;
+  for (const m of markers) {
+    if (y + lineH > PAGE.contentBottom) {
+      doc.addPage();
+      y = PAGE.marginTop;
+    }
+    const label = formatMonthLabel(m);
+    const countText = `${m.count.toLocaleString()} ${m.count === 1 ? "message" : "messages"}`;
 
     doc.setTextColor(COLORS.link);
     doc.text(label, PAGE.marginX, y, { baseline: "top" });
@@ -390,13 +464,23 @@ function drawTocPage(
       align: "right",
     });
 
-    // Whole row is clickable.
-    doc.link(PAGE.marginX, y, PAGE.contentW, lineH, {
-      pageNumber: e.pageNumber,
+    linkRects.push({
+      marker: m,
+      page: doc.getCurrentPageInfo().pageNumber,
+      x: PAGE.marginX,
+      y,
+      w: PAGE.contentW,
+      h: lineH,
     });
 
     y += lineH;
   }
+
+  return {
+    endY: y,
+    linkRects,
+    lastPage: doc.getCurrentPageInfo().pageNumber,
+  };
 }
 
 export interface ExportOptions {
@@ -422,11 +506,22 @@ export async function exportConversationToPdf(
 
   let y = drawCoverHeader(doc, fontName, profile, conversation, messages, opts.scope);
 
-  // Decide upfront whether a TOC is going to be inserted — if so, the cover
-  // gets its own page (no message bleed) so the final layout reads as
-  // [cover] → [TOC] → [body] cleanly.
-  const willHaveToc = countDistinctMonths(messages) >= 2;
+  // Precompute month buckets + counts so the TOC can be drawn inline (right
+  // under the cover, on the same page) instead of leaving the rest of page 1
+  // blank. Page numbers are filled in by the render loop below; TOC links
+  // are patched in after that.
+  const { markers: monthMarkers, byKey: monthByKey } = precomputeMonths(messages);
+  const willHaveToc = monthMarkers.length >= 2;
+
+  let tocLinkRects: TocLinkRect[] = [];
+  let tocLastPage = 0;
+
   if (willHaveToc) {
+    const toc = drawTocInline(doc, fontName, monthMarkers, y);
+    tocLinkRects = toc.linkRects;
+    tocLastPage = toc.lastPage;
+    // Body starts on a fresh page so the TOC and the conversation don't
+    // visually mash into each other.
     doc.addPage();
     y = PAGE.marginTop;
   }
@@ -434,7 +529,6 @@ export async function exportConversationToPdf(
   let lastDay = -1;
   let lastSender: string | null = null;
   let lastIsLocal: boolean | null = null;
-  const monthMarkers: MonthMarker[] = [];
   let currentMonth: MonthMarker | null = null;
 
   for (const msg of messages) {
@@ -446,8 +540,8 @@ export async function exportConversationToPdf(
         y = PAGE.marginTop;
       }
 
-      // Capture the start-of-month marker AFTER any divider page break, so
-      // the recorded pageNumber matches where the user will visually land.
+      // Resolve the precomputed month marker's pageNumber AFTER any divider
+      // page break, so it matches the page the divider actually lands on.
       const d = new Date(msg.timestamp * 1000);
       const yr = d.getFullYear();
       const mo = d.getMonth();
@@ -456,14 +550,11 @@ export async function exportConversationToPdf(
         currentMonth.year !== yr ||
         currentMonth.month !== mo
       ) {
-        currentMonth = {
-          year: yr,
-          month: mo,
-          monthStartTs: new Date(yr, mo, 1, 0, 0, 0, 0).getTime() / 1000,
-          count: 0,
-          pageNumber: doc.getCurrentPageInfo().pageNumber,
-        };
-        monthMarkers.push(currentMonth);
+        const marker = monthByKey.get(`${yr}-${mo}`);
+        if (marker && marker.pageNumber === 0) {
+          marker.pageNumber = doc.getCurrentPageInfo().pageNumber;
+        }
+        currentMonth = marker ?? null;
       }
 
       drawDivider(doc, fontName, formatDateDivider(msg.timestamp), y);
@@ -472,8 +563,6 @@ export async function exportConversationToPdf(
       lastSender = null;
       lastIsLocal = null;
     }
-
-    if (currentMonth) currentMonth.count++;
 
     if (msg.isBuzz) {
       const bh = buzzHeight();
@@ -503,32 +592,29 @@ export async function exportConversationToPdf(
     lastIsLocal = msg.isLocal;
   }
 
-  // Insert TOC pages between the cover and the body when the conversation
-  // spans multiple months. Pages are inserted blank, then filled and linked.
+  // Patch TOC link annotations now that the body render has resolved each
+  // month's page number. The TOC text was already drawn inline under the
+  // cover; we just need to attach the click targets.
   let tocInfo: { firstPage: number; lastPage: number } | null = null;
-  if (monthMarkers.length >= 2) {
-    const tocPagesNeeded = Math.ceil(
-      monthMarkers.length / TOC_ENTRIES_PER_PAGE,
-    );
-    for (let i = 0; i < tocPagesNeeded; i++) {
-      doc.insertPage(2);
-    }
-    for (const m of monthMarkers) {
-      m.pageNumber += tocPagesNeeded;
-    }
-    for (let i = 0; i < tocPagesNeeded; i++) {
-      doc.setPage(2 + i);
-      const slice = monthMarkers.slice(
-        i * TOC_ENTRIES_PER_PAGE,
-        (i + 1) * TOC_ENTRIES_PER_PAGE,
-      );
-      drawTocPage(doc, fontName, slice, i === 0);
+  if (willHaveToc) {
+    for (const rect of tocLinkRects) {
+      if (rect.marker.pageNumber > 0) {
+        doc.setPage(rect.page);
+        doc.link(rect.x, rect.y, rect.w, rect.h, {
+          pageNumber: rect.marker.pageNumber,
+        });
+      }
     }
     // Sidebar bookmarks — cheap bonus for PDF viewers that show an outline.
     for (const m of monthMarkers) {
-      doc.outline.add(null, formatMonthLabel(m), { pageNumber: m.pageNumber });
+      if (m.pageNumber > 0) {
+        doc.outline.add(null, formatMonthLabel(m), { pageNumber: m.pageNumber });
+      }
     }
-    tocInfo = { firstPage: 2, lastPage: 1 + tocPagesNeeded };
+    // TOC starts on page 1 (under the cover header) and may overflow onto
+    // additional pages. Body pages get a "← Contents" footer jump back to
+    // page 1.
+    tocInfo = { firstPage: 1, lastPage: tocLastPage };
   }
 
   drawFootersOnAllPages(doc, fontName, tocInfo);
