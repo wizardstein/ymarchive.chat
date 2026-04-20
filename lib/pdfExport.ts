@@ -298,18 +298,46 @@ function drawCoverHeader(
   return y;
 }
 
-function drawFootersOnAllPages(doc: JsPDFType, fontName: string): void {
+function drawFootersOnAllPages(
+  doc: JsPDFType,
+  fontName: string,
+  toc: { firstPage: number; lastPage: number } | null,
+): void {
   const pageCount = doc.getNumberOfPages();
   doc.setFont(fontName, "normal");
   doc.setFontSize(FONT_SIZES.footer);
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
     const footY = PAGE.pageH - 8;
+
+    // "← Contents" jump on every body page (i.e. anything past the TOC).
+    // Cover and TOC pages don't need it — cover is right above the TOC, and
+    // the TOC pages are the contents.
+    if (toc && p > toc.lastPage) {
+      const tocText = "← Contents";
+      doc.setTextColor(COLORS.link);
+      doc.text(tocText, PAGE.marginX, footY, { baseline: "alphabetic" });
+      const tw = doc.getTextWidth(tocText);
+      const lh = lineHeightMm(FONT_SIZES.footer);
+      doc.link(PAGE.marginX, footY - lh + 1, tw, lh, {
+        pageNumber: toc.firstPage,
+      });
+    }
+
     doc.setTextColor(COLORS.meta);
     doc.text(`Page ${p} of ${pageCount}`, PAGE.marginX + PAGE.contentW, footY, {
       align: "right",
     });
   }
+}
+
+function countDistinctMonths(messages: YMMessage[]): number {
+  const seen = new Set<string>();
+  for (const m of messages) {
+    const d = new Date(m.timestamp * 1000);
+    seen.add(`${d.getFullYear()}-${d.getMonth()}`);
+  }
+  return seen.size;
 }
 
 interface MonthMarker {
@@ -394,6 +422,15 @@ export async function exportConversationToPdf(
 
   let y = drawCoverHeader(doc, fontName, profile, conversation, messages, opts.scope);
 
+  // Decide upfront whether a TOC is going to be inserted — if so, the cover
+  // gets its own page (no message bleed) so the final layout reads as
+  // [cover] → [TOC] → [body] cleanly.
+  const willHaveToc = countDistinctMonths(messages) >= 2;
+  if (willHaveToc) {
+    doc.addPage();
+    y = PAGE.marginTop;
+  }
+
   let lastDay = -1;
   let lastSender: string | null = null;
   let lastIsLocal: boolean | null = null;
@@ -468,6 +505,7 @@ export async function exportConversationToPdf(
 
   // Insert TOC pages between the cover and the body when the conversation
   // spans multiple months. Pages are inserted blank, then filled and linked.
+  let tocInfo: { firstPage: number; lastPage: number } | null = null;
   if (monthMarkers.length >= 2) {
     const tocPagesNeeded = Math.ceil(
       monthMarkers.length / TOC_ENTRIES_PER_PAGE,
@@ -490,9 +528,10 @@ export async function exportConversationToPdf(
     for (const m of monthMarkers) {
       doc.outline.add(null, formatMonthLabel(m), { pageNumber: m.pageNumber });
     }
+    tocInfo = { firstPage: 2, lastPage: 1 + tocPagesNeeded };
   }
 
-  drawFootersOnAllPages(doc, fontName);
+  drawFootersOnAllPages(doc, fontName, tocInfo);
 
   const filename = `${sanitize(profile.username)}-with-${sanitize(conversation.peer)}.pdf`;
   doc.save(filename);
