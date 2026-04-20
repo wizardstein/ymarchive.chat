@@ -18,6 +18,7 @@ import {
 } from "@/lib/format";
 import type { YMConversation, YMMessage, YMProfile } from "@/lib/types";
 import { DayNavigator } from "./DayNavigator";
+import { ExportPdfModal } from "./ExportPdfModal";
 import { JumpToDateMenu } from "./JumpToDateMenu";
 import { MessageBubble } from "./MessageBubble";
 
@@ -54,6 +55,9 @@ export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
   );
   const [stickyDateTs, setStickyDateTs] = useState<number | null>(null);
   const [pendingScrollTs, setPendingScrollTs] = useState<number | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -66,6 +70,9 @@ export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
     setWindowStart(Math.max(0, conversation.messages.length - WINDOW_SIZE));
     setStickyDateTs(null);
     setPendingScrollTs(null);
+    setExportOpen(false);
+    setExporting(false);
+    setExportError(null);
   }, [conversation]);
 
   const fromUnix = useMemo(() => dateToUnixStartOfDay(fromDate), [fromDate]);
@@ -180,6 +187,38 @@ export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
     [conversation.messages, filterActive],
   );
 
+  const runExport = useCallback(
+    async (scope: "filtered" | "full") => {
+      if (exporting) return;
+      setExporting(true);
+      setExportError(null);
+      try {
+        const { exportConversationToPdf } = await import("@/lib/pdfExport");
+        const messages =
+          scope === "filtered" ? filtered : conversation.messages;
+        await exportConversationToPdf(profile, conversation, messages, {
+          scope,
+        });
+        setExportOpen(false);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Export failed";
+        setExportError(msg);
+      } finally {
+        setExporting(false);
+      }
+    },
+    [conversation, exporting, filtered, profile],
+  );
+
+  const handleExportClick = useCallback(() => {
+    setExportError(null);
+    if (filterActive) {
+      setExportOpen(true);
+    } else {
+      void runExport("full");
+    }
+  }, [filterActive, runExport]);
+
   // Once the window has re-rendered, locate the target message and scroll
   // it into view. useLayoutEffect avoids a visible flash.
   useLayoutEffect(() => {
@@ -234,6 +273,18 @@ export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
               : ""}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={handleExportClick}
+          disabled={exporting || conversation.messages.length === 0}
+          className="flex-none rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-ym-purple hover:text-ym-purple disabled:cursor-not-allowed disabled:opacity-60 sm:px-3"
+          title="Download this conversation as a PDF"
+        >
+          <span className="hidden sm:inline">
+            {exporting ? "Generating PDF…" : "📄 Export PDF"}
+          </span>
+          <span className="sm:hidden">{exporting ? "…" : "📄"}</span>
+        </button>
         {profile.avatarHistory.length > 0 && (
           <button
             onClick={() => setShowAvatarHistory((s) => !s)}
@@ -250,6 +301,25 @@ export function ChatView({ profile, conversation, onBack }: ChatViewProps) {
           </button>
         )}
       </header>
+
+      {exportError && (
+        <div className="border-b border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700">
+          PDF export failed: {exportError}
+        </div>
+      )}
+
+      {exportOpen && (
+        <ExportPdfModal
+          peer={conversation.peer}
+          filteredCount={filtered.length}
+          fullCount={conversation.messages.length}
+          busy={exporting}
+          onConfirm={runExport}
+          onClose={() => {
+            if (!exporting) setExportOpen(false);
+          }}
+        />
+      )}
 
       {showAvatarHistory && profile.avatarHistory.length > 0 && (
         <div className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-5 py-3">
