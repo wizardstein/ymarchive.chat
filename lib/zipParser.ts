@@ -112,7 +112,22 @@ function mimeForBasename(name: string): string {
   return "application/octet-stream";
 }
 
-function dedupeMessages(messages: YMMessage[]): YMMessage[] {
+/**
+ * Canonical message ordering: by timestamp, then sent-before-received within
+ * the same second, then by text. Both the original parser and the
+ * cross-session merger rely on this exact comparator so dedupe (which only
+ * compares against the immediately preceding message) catches duplicates
+ * that originated from different sources.
+ */
+export function compareMessages(a: YMMessage, b: YMMessage): number {
+  return (
+    a.timestamp - b.timestamp ||
+    (a.isLocal === b.isLocal ? 0 : a.isLocal ? -1 : 1) ||
+    (a.text < b.text ? -1 : a.text > b.text ? 1 : 0)
+  );
+}
+
+export function dedupeMessages(messages: YMMessage[]): YMMessage[] {
   if (messages.length < 2) return messages;
   const out: YMMessage[] = [messages[0]];
   for (let i = 1; i < messages.length; i++) {
@@ -398,12 +413,7 @@ async function processEntries(
   for (const profile of profiles.values()) {
     const conversations: YMConversation[] = [];
     for (const [peer, messages] of profile.conversations.entries()) {
-      messages.sort(
-        (a, b) =>
-          a.timestamp - b.timestamp ||
-          (a.isLocal === b.isLocal ? 0 : a.isLocal ? -1 : 1) ||
-          (a.text < b.text ? -1 : a.text > b.text ? 1 : 0),
-      );
+      messages.sort(compareMessages);
       conversations.push({ peer, messages: dedupeMessages(messages) });
     }
     conversations.sort((a, b) => b.messages.length - a.messages.length);
@@ -450,7 +460,7 @@ async function processEntries(
   return nonEmpty;
 }
 
-async function sha256Hex(payload: string): Promise<string> {
+export async function sha256Hex(payload: string): Promise<string> {
   const bytes = new TextEncoder().encode(payload);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const view = new Uint8Array(digest);

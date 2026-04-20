@@ -19,6 +19,7 @@ interface UploadZoneProps {
   onOpenPast?: (session: ArchiveSession) => void;
   onRemovePast?: (fingerprint: string) => void;
   onClearAll?: () => void | Promise<void>;
+  onMerge?: (fingerprints: string[]) => Promise<void>;
 }
 
 // Custom attributes that aren't in React's default typings.
@@ -48,11 +49,58 @@ export function UploadZone({
   onOpenPast,
   onRemovePast,
   onClearAll,
+  onMerge,
 }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  const exitMergeMode = useCallback(() => {
+    setMergeMode(false);
+    setSelected(new Set());
+    setMergeError(null);
+  }, []);
+
+  const toggleSelected = useCallback((fingerprint: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(fingerprint)) next.delete(fingerprint);
+      else next.add(fingerprint);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(pastSessions.map((s) => s.fingerprint)));
+  }, [pastSessions]);
+
+  const selectNone = useCallback(() => setSelected(new Set()), []);
+
+  const runMerge = useCallback(async () => {
+    if (!onMerge || selected.size < 2) return;
+    setMerging(true);
+    setMergeError(null);
+    try {
+      await onMerge(Array.from(selected));
+      // Successful merge transitions the page out of UploadZone, so we don't
+      // need to clean up local state here. If the page stays mounted (e.g.
+      // because of an unexpected error path), we still want to leave merge
+      // mode for sanity:
+      setMergeMode(false);
+      setSelected(new Set());
+    } catch (err) {
+      setMergeError(
+        err instanceof Error ? err.message : "Merge failed",
+      );
+    } finally {
+      setMerging(false);
+    }
+  }, [onMerge, selected]);
 
   const onDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>) => {
@@ -185,66 +233,169 @@ export function UploadZone({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Recent archives on this device ({pastSessions.length})
             </h3>
-            {onClearAll && (
-              <button
-                type="button"
-                onClick={() => setConfirmingClear(true)}
-                className="text-[11px] text-slate-400 hover:text-red-600"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Saved in your browser only — never uploaded. Clearing removes both
-            the pointer and the decoded data from this device.
-          </p>
-
-          <ul className="mt-4 space-y-2">
-            {pastSessions.map((s) => (
-              <li
-                key={s.fingerprint}
-                className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-ym-cream/60 p-3 transition hover:border-ym-purple"
-              >
+            <div className="flex items-center gap-3">
+              {onMerge && pastSessions.length >= 2 && !mergeMode && (
                 <button
                   type="button"
-                  onClick={() => onOpenPast?.(s)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  onClick={() => setMergeMode(true)}
+                  className="text-[11px] text-ym-purple hover:underline"
                 >
-                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-ym-purple/10 text-lg">
-                    🗂️
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-slate-900 group-hover:text-ym-purple-dark">
-                      {s.label || "Archive"}
-                    </div>
-                    <div className="truncate text-[11px] text-slate-500">
-                      {s.profileCount.toLocaleString()}{" "}
-                      {s.profileCount === 1 ? "profile" : "profiles"}
-                      {s.totalMessages > 0
-                        ? ` · ${s.totalMessages.toLocaleString()} msgs`
-                        : ""}{" "}
-                      · {formatRelativeTime(s.savedAt)}
-                    </div>
-                  </div>
+                  Select to merge
                 </button>
-                {onRemovePast && (
+              )}
+              {onClearAll && !mergeMode && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(true)}
+                  className="text-[11px] text-slate-400 hover:text-red-600"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          </div>
+          {!mergeMode && (
+            <p className="mt-1 text-[11px] text-slate-400">
+              Saved in your browser only — never uploaded. Clearing removes
+              both the pointer and the decoded data from this device.
+            </p>
+          )}
+
+          {mergeMode && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ym-purple/30 bg-ym-purple/5 p-2.5">
+              <div className="flex items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-ym-purple-dark">
+                  {selected.size} selected
+                </span>
+                <span className="text-slate-300">·</span>
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  disabled={merging}
+                  className="text-ym-purple hover:underline disabled:opacity-50"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={selectNone}
+                  disabled={merging}
+                  className="text-slate-500 hover:underline disabled:opacity-50"
+                >
+                  Select none
+                </button>
+              </div>
+            </div>
+          )}
+
+          <ul className="mt-4 space-y-2">
+            {pastSessions.map((s) => {
+              const isSelected = selected.has(s.fingerprint);
+              return (
+                <li
+                  key={s.fingerprint}
+                  className={`group flex items-center gap-2 rounded-xl border p-3 transition ${
+                    mergeMode && isSelected
+                      ? "border-ym-purple bg-ym-purple/10"
+                      : "border-slate-200 bg-ym-cream/60 hover:border-ym-purple"
+                  }`}
+                >
+                  {mergeMode && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={merging}
+                      onChange={() => toggleSelected(s.fingerprint)}
+                      aria-label={`Select ${s.label || "archive"} for merge`}
+                      className="h-4 w-4 flex-none accent-ym-purple"
+                    />
+                  )}
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemovePast(s.fingerprint);
+                    onClick={() => {
+                      if (mergeMode) {
+                        if (!merging) toggleSelected(s.fingerprint);
+                      } else {
+                        onOpenPast?.(s);
+                      }
                     }}
-                    title="Remove this archive from your device"
-                    aria-label="Remove this archive"
-                    className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 focus:opacity-100"
+                    disabled={mergeMode && merging}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-not-allowed"
                   >
-                    ×
+                    <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-ym-purple/10 text-lg">
+                      🗂️
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-900 group-hover:text-ym-purple-dark">
+                        {s.label || "Archive"}
+                      </div>
+                      <div className="truncate text-[11px] text-slate-500">
+                        {s.profileCount.toLocaleString()}{" "}
+                        {s.profileCount === 1 ? "profile" : "profiles"}
+                        {s.totalMessages > 0
+                          ? ` · ${s.totalMessages.toLocaleString()} msgs`
+                          : ""}{" "}
+                        · {formatRelativeTime(s.savedAt)}
+                      </div>
+                    </div>
                   </button>
-                )}
-              </li>
-            ))}
+                  {!mergeMode && onRemovePast && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemovePast(s.fingerprint);
+                      }}
+                      title="Remove this archive from your device"
+                      aria-label="Remove this archive"
+                      className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 focus:opacity-100"
+                    >
+                      ×
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
+
+          {mergeMode && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] text-slate-600">
+                Your selected archives stay in your browser, untouched. The
+                merge creates a new combined archive alongside them, with
+                duplicate messages removed. Profiles are matched by username
+                (case-insensitive).
+              </p>
+              {mergeError && (
+                <p className="mt-2 text-[11px] text-red-600">{mergeError}</p>
+              )}
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={exitMergeMode}
+                  disabled={merging}
+                  className="rounded-full px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={runMerge}
+                  disabled={merging || selected.size < 2}
+                  title={
+                    selected.size < 2
+                      ? "Select at least 2 archives to merge"
+                      : undefined
+                  }
+                  className="rounded-full bg-ym-purple px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-ym-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {merging
+                    ? "Merging…"
+                    : `Merge selected${selected.size >= 2 ? ` (${selected.size})` : ""}`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {confirmingClear && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900">

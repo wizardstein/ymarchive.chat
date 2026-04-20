@@ -20,8 +20,16 @@ export const FAQS = [
     a: "Yes. All parsing, XOR decryption, and rendering happens in JavaScript on your device. The site is a static bundle — there's no backend. Open your browser's Network tab and you'll see zero outgoing requests with your data.",
   },
   {
+    q: "Can I share a conversation with a friend?",
+    a: "Yes — open any conversation and click 📄 Export PDF in the header. The PDF is generated entirely on your device (verifiable in DevTools → Network) and you share it however you like — email, AirDrop, Signal, whatever. Each page footer has a small ymarchive.chat link so the recipient knows how it was made. If a date range or search filter is active when you export, you'll be asked whether to include just the filtered messages or the full conversation.",
+  },
+  {
     q: "What if my archive has multiple profiles?",
-    a: "No problem — every profile folder gets its own account in the sidebar. Switch between them freely. If you opened snapshots from two different backups (say profiles1 and profiles2) that happened to contain the same profile, duplicate messages are removed automatically.",
+    a: "No problem — every profile folder gets its own account in the sidebar. Switch between them freely. If you opened snapshots from two different backups (say profiles1 and profiles2) that happened to contain the same profile, duplicate messages are removed automatically. If you have separate uploaded archives that overlap (rather than folders inside one upload), use the \"Select to merge\" option in the recent-archives list to combine them.",
+  },
+  {
+    q: "I have a few different backups of the same archive. Can I combine them?",
+    a: "Yes. From the upload screen's recent-archives list, click \"Select to merge\", tick the archives that belong to the same person, and hit \"Merge selected\". The viewer combines profiles by username (case-insensitive), removes overlapping messages, and opens the merged result. Your original archives stay in the list untouched — the merge produces a new combined entry alongside them, so you can always go back.",
   },
   {
     q: "Why do some of my filenames look truncated?",

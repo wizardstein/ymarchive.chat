@@ -7,7 +7,8 @@ import { ProcessingState } from "@/components/viewer/ProcessingState";
 import { ProfilePicker } from "@/components/viewer/ProfilePicker";
 import { Sidebar } from "@/components/viewer/Sidebar";
 import { UploadZone, type UploadPayload } from "@/components/viewer/UploadZone";
-import { cacheClearAll, cacheGet } from "@/lib/cache";
+import { cacheClearAll, cacheGet, cachePut } from "@/lib/cache";
+import { mergeProfiles } from "@/lib/mergeProfiles";
 import {
   clearAllSessions,
   type ArchiveSession,
@@ -18,7 +19,7 @@ import {
   upsertSession,
 } from "@/lib/session";
 import type { ProcessingProgress, YMProfile } from "@/lib/types";
-import { parseArchive, parseFolderEntries } from "@/lib/zipParser";
+import { parseArchive, parseFolderEntries, sha256Hex } from "@/lib/zipParser";
 
 export default function ViewerPage() {
   const [profiles, setProfiles] = useState<YMProfile[] | null>(null);
@@ -233,6 +234,81 @@ export default function ViewerPage() {
     [refreshPastSessions],
   );
 
+  const handleMerge = useCallback(
+    async (fingerprints: string[]) => {
+      if (fingerprints.length < 2) {
+        throw new Error("Pick at least two archives to merge.");
+      }
+
+      // Pull each source from the IndexedDB cache. If any has been evicted
+      // since the past-sessions list was built, refuse the whole operation
+      // so the user knows what's going on rather than getting a partial merge.
+      const sources: YMProfile[][] = [];
+      const labels: string[] = [];
+      for (const fp of fingerprints) {
+        const cached = await cacheGet(fp);
+        if (!cached || cached.length === 0) {
+          const stale = pastSessions.find((s) => s.fingerprint === fp);
+          throw new Error(
+            stale
+              ? `"${stale.label}" is no longer in your browser cache. Remove it from the list and try again.`
+              : "One of the selected archives is no longer in your browser cache. Refresh the page and try again.",
+          );
+        }
+        sources.push(cached);
+        const meta = pastSessions.find((s) => s.fingerprint === fp);
+        if (meta) labels.push(meta.label);
+      }
+
+      const merged = mergeProfiles(sources);
+      if (merged.length === 0) {
+        throw new Error(
+          "The selected archives produced no messages after merging.",
+        );
+      }
+
+      const sortedFps = [...fingerprints].sort();
+      const synthFp = `merged:${await sha256Hex(sortedFps.join("|"))}`;
+
+      await cachePut(synthFp, merged);
+      // cachePut silently swallows quota errors; verify the write actually
+      // landed before we update the session list.
+      const readback = await cacheGet(synthFp);
+      if (!readback || readback.length === 0) {
+        throw new Error(
+          "Your browser ran out of storage saving the merged archive. Remove some old sessions from the list and try again.",
+        );
+      }
+
+      const totalMessages = merged.reduce(
+        (s, p) => s + p.conversations.reduce((ss, c) => ss + c.messages.length, 0),
+        0,
+      );
+      const baseLabel = sessionLabel(merged);
+      const mergedLabel = `Merged · ${baseLabel} (${fingerprints.length} archives)`;
+      const now = Date.now();
+      const newSession: ArchiveSession = {
+        fingerprint: synthFp,
+        label: mergedLabel,
+        profileCount: merged.length,
+        totalMessages,
+        pickedIdx: merged.length === 1 ? 0 : null,
+        activePeer:
+          merged.length === 1
+            ? (merged[0].conversations[0]?.peer ?? null)
+            : null,
+        savedAt: now,
+        createdAt: now,
+      };
+      upsertSession(newSession);
+      refreshPastSessions();
+
+      // Drop the user straight into the merged session.
+      await loadSession(newSession);
+    },
+    [pastSessions, refreshPastSessions, loadSession],
+  );
+
   const handleClearAll = useCallback(async () => {
     clearAllSessions();
     await cacheClearAll();
@@ -276,6 +352,7 @@ export default function ViewerPage() {
         onOpenPast={handleOpenPast}
         onRemovePast={handleRemovePast}
         onClearAll={handleClearAll}
+        onMerge={handleMerge}
       />
     );
   }
