@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FolderFile } from "@/lib/fsEntry";
 import {
   collectDirectoryInputFiles,
   collectDroppedFiles,
   looksLikeZip,
 } from "@/lib/fsEntry";
+import { isMobileDevice } from "@/lib/device";
 import type { ArchiveSession } from "@/lib/session";
 
 export type UploadPayload =
@@ -57,8 +58,14 @@ export function UploadZone({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setIsMobile(isMobileDevice());
+  }, []);
 
   const exitMergeMode = useCallback(() => {
     setMergeMode(false);
@@ -106,6 +113,7 @@ export function UploadZone({
     async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       setDragging(false);
+      setDropError(null);
       const items = e.dataTransfer.items;
       const files = e.dataTransfer.files;
 
@@ -119,6 +127,13 @@ export function UploadZone({
         }
       }
 
+      if (isMobile) {
+        setDropError(
+          "Folder uploads aren't supported on mobile — they're very slow. Please zip the folder on a computer first, then drop the .zip here.",
+        );
+        return;
+      }
+
       const collected = await collectDroppedFiles(e.dataTransfer);
       if (collected.length === 0) return;
 
@@ -128,7 +143,7 @@ export function UploadZone({
       }
       onUpload({ kind: "folder", files: collected });
     },
-    [onUpload],
+    [onUpload, isMobile],
   );
 
   const onFileInputChange = useCallback(
@@ -174,22 +189,40 @@ export function UploadZone({
         <h2 className="mt-4 font-display text-3xl text-ym-purple-dark">
           Drop your archive here
         </h2>
-        <p className="mt-3 text-sm text-slate-600">
-          A{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
-            .zip
-          </code>{" "}
-          file, or the folder itself — either works. Multiple profile folders
-          (
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
-            profiles1
-          </code>
-          ,{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
-            profiles2
-          </code>
-          …) can sit side by side inside one folder and we'll merge them.
-        </p>
+        {isMobile ? (
+          <p className="mt-3 text-sm text-slate-600">
+            Pick a{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              .zip
+            </code>{" "}
+            file. Multiple profile folders (
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              profiles1
+            </code>
+            ,{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              profiles2
+            </code>
+            …) can sit side by side inside the zip and we&apos;ll merge them.
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-slate-600">
+            A{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              .zip
+            </code>{" "}
+            file, or the folder itself — either works. Multiple profile folders
+            (
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              profiles1
+            </code>
+            ,{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+              profiles2
+            </code>
+            …) can sit side by side inside one folder and we&apos;ll merge them.
+          </p>
+        )}
         <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-3">
           <button
             type="button"
@@ -198,15 +231,24 @@ export function UploadZone({
           >
             Pick a .zip file
           </button>
-          <span className="text-xs text-slate-400">or</span>
-          <button
-            type="button"
-            onClick={() => folderInputRef.current?.click()}
-            className="rounded-full border border-ym-purple px-5 py-2.5 text-sm font-semibold text-ym-purple transition hover:bg-ym-purple/10"
-          >
-            Pick a folder
-          </button>
+          {!isMobile && (
+            <>
+              <span className="text-xs text-slate-400">or</span>
+              <button
+                type="button"
+                onClick={() => folderInputRef.current?.click()}
+                className="rounded-full border border-ym-purple px-5 py-2.5 text-sm font-semibold text-ym-purple transition hover:bg-ym-purple/10"
+              >
+                Pick a folder
+              </button>
+            </>
+          )}
         </div>
+        {dropError && (
+          <p className="mx-auto mt-4 max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-xs text-amber-900">
+            {dropError}
+          </p>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -214,17 +256,19 @@ export function UploadZone({
           className="hidden"
           onChange={onFileInputChange}
         />
-        <input
-          ref={folderInputRef}
-          {...({
-            webkitdirectory: "",
-            directory: "",
-          } as DirInputProps)}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={onFolderInputChange}
-        />
+        {!isMobile && (
+          <input
+            ref={folderInputRef}
+            {...({
+              webkitdirectory: "",
+              directory: "",
+            } as DirInputProps)}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={onFolderInputChange}
+          />
+        )}
       </div>
 
       {pastSessions.length > 0 && (
@@ -445,16 +489,26 @@ export function UploadZone({
             More in the FAQ →
           </a>
         </p>
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900">
-          <strong className="font-semibold">
-            Heads up about &ldquo;Pick a folder&rdquo;:
-          </strong>{" "}
-          your browser will ask{" "}
-          <em>&ldquo;Upload N files to this site?&rdquo;</em> — that&apos;s
-          the browser&apos;s fixed wording for folder access. Nothing is
-          actually uploaded; every file stays in your browser. You can verify
-          this in the Network tab. (Drag-and-drop skips this dialog.)
-        </p>
+        {isMobile ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900">
+            <strong className="font-semibold">On mobile, zip only.</strong>{" "}
+            Picking a folder works on phones and tablets but is extremely slow
+            — mobile browsers read every file through a separate system
+            round-trip. Zip the folder on a computer first, then open the{" "}
+            <code className="font-mono">.zip</code> here.
+          </p>
+        ) : (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900">
+            <strong className="font-semibold">
+              Heads up about &ldquo;Pick a folder&rdquo;:
+            </strong>{" "}
+            your browser will ask{" "}
+            <em>&ldquo;Upload N files to this site?&rdquo;</em> — that&apos;s
+            the browser&apos;s fixed wording for folder access. Nothing is
+            actually uploaded; every file stays in your browser. You can verify
+            this in the Network tab. (Drag-and-drop skips this dialog.)
+          </p>
+        )}
         <p>
           💡 The folder can be named anything —{" "}
           <code className="font-mono">Profiles</code>,{" "}
