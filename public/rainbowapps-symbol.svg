@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 32 172 104">
+  <polyline points="42,118 51.1,84 76,59.1 110,50 144,59.1 168.9,84 178,118" fill="none" stroke="#4A443B" stroke-width="2.5"></polyline>
+  <rect x="30" y="106" width="24" height="24" rx="7.5" fill="#E2574C"></rect>
+  <rect x="39.1" y="72" width="24" height="24" rx="7.5" fill="#F0933D"></rect>
+  <rect x="64" y="47.1" width="24" height="24" rx="7.5" fill="#EFC23F"></rect>
+  <rect x="98" y="38" width="24" height="24" rx="7.5" fill="#55A45E"></rect>
+  <rect x="132" y="47.1" width="24" height="24" rx="7.5" fill="#3FA39B"></rect>
+  <rect x="156.9" y="72" width="24" height="24" rx="7.5" fill="#4E7FD0"></rect>
+  <rect x="166" y="106" width="24" height="24" rx="7.5" fill="#8B66C6"></rect>
+</svg>

@@ -1,11 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import { Hero } from "@/components/landing/Hero";
 import { TrustPillars } from "@/components/landing/TrustPillars";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { DemoPreview } from "@/components/landing/DemoPreview";
 import { FAQ, FAQS } from "@/components/landing/FAQ";
-import { DonationButton } from "@/components/DonationButton";
 
 export const metadata: Metadata = {
   title: {
@@ -200,10 +200,33 @@ export default function LandingPage() {
           >
             💬 Feedback or bug report
           </Link>
-          <DonationButton
+          <a
+            href="https://www.rainbowapps.org/#sustine"
+            target="_blank"
+            rel="noopener noreferrer"
             className="rounded-full bg-amber-400 px-4 py-1.5 font-semibold text-amber-950 transition hover:bg-amber-300"
-            label="☕ Support this project"
-          />
+          >
+            ☕ Support this project
+          </a>
+        </div>
+        <div className="mx-auto mt-8 max-w-xl border-t border-white/10 px-6 pt-5">
+          <a
+            href="https://www.rainbowapps.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-xs text-white/60 transition hover:text-white"
+          >
+            <Image
+              src="/rainbowapps-symbol.svg"
+              alt=""
+              width={26}
+              height={16}
+              aria-hidden="true"
+            />
+            <span>
+              a <strong className="font-semibold">RainbowApps</strong> project
+            </span>
+          </a>
         </div>
       </footer>
     </main>
