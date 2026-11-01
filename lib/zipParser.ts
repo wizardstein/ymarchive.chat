@@ -44,6 +44,33 @@ const DAT_PATH_RE =
 const DAT_FALLBACK_RE =
   /(?:^|\/)Messages\/([^/]+)\/(\d{6,8})-([^/]+?)\.dat$/i;
 
+// The local Yahoo ID as written into the .dat filename (YYYYMMDD-<id>.dat).
+// Restricted to characters a Yahoo ID can contain, so OS copy suffixes like
+// "20070717-adelin (2)" or "... - Copy" don't get taken as the ID.
+const DAT_NAME_USER_RE = /^\d{6,8}-([\w.@-]+)$/;
+
+function usernameFromDatName(baseName: string): string | null {
+  return baseName.match(DAT_NAME_USER_RE)?.[1] ?? null;
+}
+
+/**
+ * XOR key candidates, most likely first. Yahoo wrote the ID into every
+ * filename, so that beats the folder name above Archive/ — the folder can be
+ * renamed, or Archive/ dropped into a folder of the user's own, and then the
+ * folder name decrypts to junk (bug report 2026-11-01). Lowercase variants
+ * cover IDs typed with different capitalisation. The decoder keeps whichever
+ * candidate yields readable text.
+ */
+function keyCandidates(...names: Array<string | null>): string[] {
+  const out: string[] = [];
+  for (const n of names) if (n && !out.includes(n)) out.push(n);
+  for (const n of [...out]) {
+    const lower = n.toLowerCase();
+    if (!out.includes(lower)) out.push(lower);
+  }
+  return out;
+}
+
 const ICON_INDEX_RE = /(?:^|\/)([^/]+)\/My Icons\/Index\.ini$/i;
 
 const ICON_IMAGE_RE =
@@ -237,6 +264,7 @@ async function processEntries(
     entry: SourceEntry;
     username: string;
     peer: string;
+    keys: string[];
   }> = [];
   const iconIndexEntries: Array<{
     entry: SourceEntry;
@@ -258,7 +286,14 @@ async function processEntries(
   for (const entry of entries) {
     const datMatch = entry.path.match(DAT_PATH_RE);
     if (datMatch) {
-      datEntries.push({ entry, username: datMatch[1], peer: datMatch[2] });
+      const folderUser = datMatch[1];
+      const fileUser = usernameFromDatName(datMatch[3]);
+      datEntries.push({
+        entry,
+        username: fileUser ?? folderUser,
+        peer: datMatch[2],
+        keys: keyCandidates(fileUser, folderUser),
+      });
       continue;
     }
     // Fallback: user picked the Archive/ or Messages/ folder directly, so
@@ -269,7 +304,7 @@ async function processEntries(
       const peer = datFallback[1];
       const username = datFallback[3];
       if (username && peer) {
-        datEntries.push({ entry, username, peer });
+        datEntries.push({ entry, username, peer, keys: keyCandidates(username) });
         continue;
       }
     }
@@ -312,11 +347,12 @@ async function processEntries(
     filesTotal: total,
   });
 
-  await runPool(datEntries, READ_CONCURRENCY, async ({ entry, username, peer }) => {
+  await runPool(datEntries, READ_CONCURRENCY, async ({ entry, username, peer, keys }) => {
     const bytes = await entry.getBytes();
     const messages = decodeDatFile(bytes, {
       localUsername: username,
       peerUsername: peer,
+      keyCandidates: keys,
     });
     if (messages.length) {
       const profile = getOrCreate(profiles, username);

@@ -54,7 +54,7 @@ export function stripFormatting(text: string): string {
     .trim();
 }
 
-interface RawBlock {
+export interface RawBlock {
   timestamp: number;
   direction: number;
   payload: Uint8Array;
@@ -106,9 +106,63 @@ export function parseBlocks(data: Uint8Array): RawBlock[] {
   return blocks;
 }
 
+// How many payload bytes to sample per candidate when picking a key.
+const KEY_SAMPLE_BYTES = 8192;
+
+/**
+ * Fraction of decrypted bytes that are control characters chat text never
+ * contains. A wrong key turns letter⊕letter into 0x00–0x1F, so wrong keys
+ * score high and the right key scores near 0. TAB/LF/CR and ESC (YM's ANSI
+ * colour codes) are legitimate.
+ */
+function garbageScore(blocks: RawBlock[], key: string): number {
+  const keyBytes = new TextEncoder().encode(key);
+  if (keyBytes.length === 0) return 1;
+  let seen = 0;
+  let bad = 0;
+  for (const { payload } of blocks) {
+    for (let i = 0; i < payload.length && seen < KEY_SAMPLE_BYTES; i++, seen++) {
+      const b = payload[i] ^ keyBytes[i % keyBytes.length];
+      if (
+        (b < 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d && b !== 0x1b) ||
+        b === 0x7f
+      ) {
+        bad++;
+      }
+    }
+    if (seen >= KEY_SAMPLE_BYTES) break;
+  }
+  return seen ? bad / seen : 0;
+}
+
+/**
+ * Pick the XOR key that yields the most text-like output. Ties go to the
+ * earlier candidate, so callers list candidates in order of preference.
+ */
+export function pickXorKey(blocks: RawBlock[], candidates: string[]): string {
+  let best = candidates[0] ?? "";
+  if (candidates.length < 2) return best;
+  let bestScore = Infinity;
+  for (const candidate of candidates) {
+    const score = garbageScore(blocks, candidate);
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 export interface DecodeOptions {
+  /** Shown as the sender of local messages. */
   localUsername: string;
   peerUsername: string;
+  /**
+   * XOR keys to try, most likely first. The key is the local Yahoo ID, but
+   * the folder it was inferred from may have been renamed, so the parser
+   * passes every plausible spelling. Defaults to [localUsername].
+   */
+  keyCandidates?: string[];
 }
 
 export function decodeDatFile(
@@ -117,9 +171,10 @@ export function decodeDatFile(
 ): YMMessage[] {
   const blocks = parseBlocks(data);
   const messages: YMMessage[] = [];
+  const key = pickXorKey(blocks, opts.keyCandidates ?? [opts.localUsername]);
 
   for (const block of blocks) {
-    const decrypted = xorDecrypt(block.payload, opts.localUsername);
+    const decrypted = xorDecrypt(block.payload, key);
     const rawText = decodeText(decrypted);
     const cleaned = stripFormatting(rawText);
 

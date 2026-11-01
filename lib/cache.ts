@@ -12,7 +12,9 @@ const DB_VERSION = 1;
 //   v1 — initial
 //   v2 — fallback path regex + adjacent dedupe tweaks; forces everyone to
 //        re-parse so the expected data shows up.
-const SCHEMA_VERSION = 2;
+//   v3 — XOR key taken from the .dat filename / auto-picked; archives
+//        cached with a wrong key held junk text and must re-decode.
+const SCHEMA_VERSION = 3;
 
 interface StoredResult {
   schemaVersion: number;

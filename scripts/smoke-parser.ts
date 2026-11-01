@@ -113,9 +113,29 @@ async function caseB() {
   }
 }
 
+async function caseC() {
+  // The profile folder was renamed (or Archive/ was dropped into a folder of
+  // the user's own), so the segment above Archive is NOT the Yahoo ID and is
+  // a wrong XOR key. The YYYYMMDD-<username>.dat filename still names the
+  // real account — the parser must decode with it (bug report 2026-11-01).
+  const user = "lavinia_selena";
+  const peer = "crystal_princess";
+  const block = buildBlock({ timestamp: 1184682120, direction: 0, message: "hello from a renamed folder", key: user });
+  const files = [
+    { path: `yahoo backup/Archive/Messages/${peer}/20070717-${user}.dat`, file: fileFromBytes(block, `20070717-${user}.dat`) },
+  ];
+  const { profiles } = await parseFolderEntries(files);
+  if (profiles.length !== 1) fail(`C: expected 1 profile, got ${profiles.length}`);
+  const p = profiles[0];
+  if (p.username !== user) fail(`C: expected username ${user}, got ${p.username}`);
+  const text = p.conversations[0]?.messages[0]?.text;
+  if (text !== "hello from a renamed folder") fail(`C: decoded text wrong: ${JSON.stringify(text)}`);
+}
+
 async function main() {
   await caseA();
   await caseB();
+  await caseC();
   console.log("OK — parser handles profiles1/profiles2, dedupe, avatar, AND Archive-only fallback");
 }
 

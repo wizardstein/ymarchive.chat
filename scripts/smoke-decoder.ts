@@ -79,5 +79,18 @@ if (msgs[1].text.includes("\x1b") || msgs[1].text.includes("<font")) {
 }
 if (msgs[0].timestamp !== 1184682120) fail("msg0 timestamp wrong");
 
+// Wrong-key guard (bug report 2026-11-01: messages rendered as "| ~", "/=",
+// "N{"). When the first key candidate is wrong (e.g. a renamed profile
+// folder), the decoder must pick the candidate that yields readable text.
+const guessed = decodeDatFile(combined, {
+  localUsername: "my yahoo backup",
+  peerUsername: peer,
+  keyCandidates: ["my yahoo backup", username],
+});
+if (guessed.length !== 2) fail(`key-pick: expected 2 messages, got ${guessed.length}`);
+if (guessed[0].text !== "hey you on? :)") {
+  fail(`key-pick: picked the wrong key, msg0 = ${JSON.stringify(guessed[0].text)}`);
+}
+
 console.log("OK — decoder round-trip works");
 console.log(msgs);

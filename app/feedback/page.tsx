@@ -15,6 +15,8 @@ type Kind = keyof typeof SUBJECT_LINES;
 export default function FeedbackPage() {
   const [kind, setKind] = useState<Kind>("bug");
   const [body, setBody] = useState("");
+  const [email, setEmail] = useState("");
+  const [repliedTo, setRepliedTo] = useState("");
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -56,6 +58,7 @@ export default function FeedbackPage() {
         body: JSON.stringify({
           kind,
           body,
+          email: email.trim(),
           diagnostics: includeDiagnostics ? diagnostics : "",
         }),
       });
@@ -72,6 +75,7 @@ export default function FeedbackPage() {
         );
         return;
       }
+      setRepliedTo(email.trim());
       setSent(true);
       setBody("");
     } catch {
@@ -111,9 +115,17 @@ export default function FeedbackPage() {
                 Message sent — thank you!
               </h2>
               <p className="text-sm text-slate-600">
-                It landed in the developer&apos;s inbox. If you included an
-                email address in the body, you may hear back; otherwise this
-                is a one-way kind of thing.
+                {repliedTo ? (
+                  <>
+                    It landed in the developer&apos;s inbox. Any reply will
+                    go to <span className="font-medium">{repliedTo}</span>.
+                  </>
+                ) : (
+                  <>
+                    It landed in the developer&apos;s inbox. You didn&apos;t
+                    leave an email, so this is a one-way kind of thing.
+                  </>
+                )}
               </p>
               <button
                 type="button"
@@ -164,6 +176,31 @@ export default function FeedbackPage() {
                 }
                 className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-ym-purple focus:outline-none focus:ring-1 focus:ring-ym-purple"
               />
+
+              <label
+                htmlFor="feedback-email"
+                className="mt-6 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Your email{" "}
+                <span className="font-normal normal-case tracking-normal text-slate-400">
+                  (optional — only if you&apos;d like a reply)
+                </span>
+              </label>
+              <input
+                id="feedback-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                maxLength={254}
+                className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-ym-purple focus:outline-none focus:ring-1 focus:ring-ym-purple"
+              />
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Used only to answer this message. Never shared, never added to
+                a list.
+              </p>
 
               <div className="mt-4 rounded-lg border border-slate-200 p-3">
                 <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-600">

@@ -16,6 +16,11 @@ import { NextResponse } from "next/server";
 const MAX_BODY_CHARS = 10_000;
 const MAX_DIAG_CHARS = 2_000;
 const MIN_BODY_CHARS = 5;
+const MAX_EMAIL_CHARS = 254;
+// Deliberately loose (one @, a dot in the domain), but no whitespace, quotes,
+// angle brackets, commas or semicolons — so the value can't smuggle extra
+// recipients or header text into reply_to.
+const EMAIL_RE = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/;
 
 const SUBJECT_PREFIX: Record<string, string> = {
   bug: "[Bug]",
@@ -54,8 +59,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { kind: rawKind, body: rawBody, diagnostics: rawDiag } =
-    payload as { kind?: unknown; body?: unknown; diagnostics?: unknown };
+  const {
+    kind: rawKind,
+    body: rawBody,
+    diagnostics: rawDiag,
+    email: rawEmail,
+  } = payload as {
+    kind?: unknown;
+    body?: unknown;
+    diagnostics?: unknown;
+    email?: unknown;
+  };
 
   const kind =
     typeof rawKind === "string" && SUBJECT_PREFIX[rawKind]
@@ -72,6 +86,16 @@ export async function POST(req: Request) {
     );
   }
 
+  // Optional address of the person writing in. It becomes the Reply-To, so
+  // hitting "Reply" in the inbox answers them directly.
+  const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
+  if (email && (email.length > MAX_EMAIL_CHARS || !EMAIL_RE.test(email))) {
+    return NextResponse.json(
+      { error: "That email address doesn't look right — fix it or leave it empty." },
+      { status: 400 },
+    );
+  }
+
   // Gmail strips [bracketed] tags when computing thread identity, so if the
   // rest of the subject is the same across messages it collapses them all
   // under one thread title. Append a snippet of the body so every subject
@@ -84,10 +108,18 @@ export async function POST(req: Request) {
   const subject = snippet
     ? `${SUBJECT_PREFIX[kind]} ${snippet}`
     : `${SUBJECT_PREFIX[kind]} YM Archive Viewer`;
+  const replyLine = email
+    ? `Reply to: ${email}`
+    : "No reply address given.";
   const textBody = diagnostics
-    ? `${body}\n\n---\nDiagnostics:\n${diagnostics}`
-    : body;
+    ? `${replyLine}\n\n${body}\n\n---\nDiagnostics:\n${diagnostics}`
+    : `${replyLine}\n\n${body}`;
   const htmlBody = `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;">
+  <p style="color:#666;font-size:12px;margin:0 0 12px 0;">${
+    email
+      ? `Reply to: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
+      : "No reply address given."
+  }</p>
   <p style="white-space:pre-wrap;margin:0 0 12px 0;">${escapeHtml(body)}</p>
   ${
     diagnostics
@@ -111,6 +143,7 @@ export async function POST(req: Request) {
         subject,
         text: textBody,
         html: htmlBody,
+        ...(email ? { reply_to: email } : {}),
       }),
     });
 
